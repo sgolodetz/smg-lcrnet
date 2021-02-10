@@ -56,25 +56,23 @@ class SkeletonDetector:
         pass
 
     def detect(self, imagename: str) -> None:
-        img_output_list = [imagename]
+        img_output_list = [cv2.imread(imagename)]
 
         # run lcrnet on a list of images
         model: LCRNet = make_model(self.__model, self.__cfg, self.__njts, self.__gpuid)
         res = detect_pose(img_output_list, self.__anchor_poses, self.__njts, model)
 
-        # projmat = np.load(os.path.join(os.path.dirname(__file__), 'standard_projmat.npy'))
         projMat_block_diag, M = scene.get_matrices(self.__projmat, self.__njts)
 
-        for i, imname in enumerate(img_output_list):  # for each image
-            image = np.asarray(Image.open(imname))
+        for i, image in enumerate(img_output_list):  # for each image
             resolution = image.shape[:2]
 
             # perform postprocessing
-            print('postprocessing (PPI) on image ', imname)
+            print('postprocessing (PPI) on image ', i)
             detections = LCRNet_PPI(res[i], self.__K, resolution, J=self.__njts, **self.__ppi_params)
 
             # move 3d pose into scene coordinates
-            print('3D scene coordinates regression on image ', imname)
+            print('3D scene coordinates regression on image ', i)
             for detection in detections:
                 delta3d = scene.compute_reproj_delta_3d(detection, projMat_block_diag, M, self.__njts)
                 detection['pose3d'][:  self.__njts] += delta3d[0]
@@ -82,8 +80,8 @@ class SkeletonDetector:
                 detection['pose3d'][2 * self.__njts:3 * self.__njts] -= delta3d[2]
 
             # show results
-            print('displaying results of image ', imname)
-            display_poses(image, detections, self.__njts)
+            print('displaying results of image ', i)
+            display_poses(image[:, :, [2, 1, 0]], detections, self.__njts)
 
     # PRIVATE METHODS
 

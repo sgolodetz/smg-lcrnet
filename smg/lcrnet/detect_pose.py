@@ -80,11 +80,10 @@ def detect_pose(img_output_list, anchor_poses, njts, model: LCRNet):
     gpuid: -1 for using cpu mode, otherwise device_id
     """
     output = []
-    # iterate over image 
-    for imgname in img_output_list:
-        print('processing '+imgname)
-        # load the images and prepare the blob
-        im = cv2.imread( imgname )        
+    # iterate over image
+    for i, im in enumerate(img_output_list):
+        print(f"processing image {i}")
+        # prepare the blob
         inputs, im_scale = _get_blobs(im, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE) # prepare blobs
 
         # forward
