@@ -59,7 +59,8 @@ class SkeletonDetector:
         img_output_list = [(imagename, None)]
 
         # run lcrnet on a list of images
-        res = detect_pose(img_output_list, self.__model, self.__cfg, self.__anchor_poses, self.__njts, gpuid=self.__gpuid)
+        model: LCRNet = make_model(self.__model, self.__cfg, self.__njts, self.__gpuid)
+        res = detect_pose(img_output_list, self.__anchor_poses, self.__njts, model)
 
         # projmat = np.load(os.path.join(os.path.dirname(__file__), 'standard_projmat.npy'))
         projMat_block_diag, M = scene.get_matrices(self.__projmat, self.__njts)
@@ -90,3 +91,24 @@ class SkeletonDetector:
         filename: str = os.path.join(self.__model_dir, f"{self.__model_name}_{specifier}.pkl")
         with open(filename, "rb") as f:
             return pickle.load(f)
+
+    # def __make_model(ckpt, cfg_dict, njts: int, gpuid: int) -> LCRNet:
+    #     # load the anchor poses and the network
+    #     if gpuid >= 0:
+    #         assert torch.cuda.is_available(), "You should launch the script on cpu if cuda is not available"
+    #         torch.device('cuda:0')
+    #     else:
+    #         torch.device('cpu')
+    #
+    #     # load config and network
+    #     print('loading the model')
+    #     _merge_a_into_b(cfg_dict, cfg)
+    #     cfg.MODEL.LOAD_IMAGENET_PRETRAINED_WEIGHTS = False
+    #     cfg.CUDA = gpuid >= 0
+    #     assert_and_infer_cfg()
+    #     model = LCRNet(njts)
+    #     if cfg.CUDA: model.cuda()
+    #     net_utils.load_ckpt(model, ckpt)
+    #     model = mynn.DataParallel(model, cpu_keywords=['im_info', 'roidb'], minibatch=True, device_ids=[0])
+    #     model.eval()
+    #     return model

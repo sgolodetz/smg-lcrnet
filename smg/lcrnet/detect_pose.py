@@ -39,28 +39,17 @@ from lcrnet_model import LCRNet
 NT = 5       # 2D + 3D 
 
 
-def _get_blobs(im, rois, target_scale, target_max_size):
+def _get_blobs(im, target_scale, target_max_size):
     """Convert an image and RoIs within that image into network inputs."""
     blobs = {}
     blobs['data'], im_scale, blobs['im_info'] = \
         blob_utils.get_image_blob(im, target_scale, target_max_size)
-    if rois is not None:
-        blobs['rois'] = _get_rois_blob(rois, im_scale)
     return blobs, im_scale
 
-def detect_pose( img_output_list, ckpt, cfg_dict, anchor_poses, njts, gpuid=-1):
-    """
-    detect poses in a list of image
-    img_output_list: list of couple (path_to_image, path_to_outputfile)
-    ckpt_fname: path to the model weights
-    cfg_dict: directory of configuration
-    anchor_poses: file containing the anchor_poses or directly the anchor poses
-    njts: number of joints in the model
-    gpuid: -1 for using cpu mode, otherwise device_id
-    """
-        
+
+def make_model(ckpt, cfg_dict, njts: int, gpuid: int) -> LCRNet:
     # load the anchor poses and the network
-    if gpuid>=0:
+    if gpuid >= 0:
         assert torch.cuda.is_available(), "You should launch the script on cpu if cuda is not available"
         torch.device('cuda:0')
     else:
@@ -70,22 +59,33 @@ def detect_pose( img_output_list, ckpt, cfg_dict, anchor_poses, njts, gpuid=-1):
     print('loading the model')
     _merge_a_into_b(cfg_dict, cfg)
     cfg.MODEL.LOAD_IMAGENET_PRETRAINED_WEIGHTS = False
-    cfg.CUDA = gpuid>=0
+    cfg.CUDA = gpuid >= 0
     assert_and_infer_cfg()
     model = LCRNet(njts)
     if cfg.CUDA: model.cuda()
     net_utils.load_ckpt(model, ckpt)
     model = mynn.DataParallel(model, cpu_keywords=['im_info', 'roidb'], minibatch=True, device_ids=[0])
     model.eval()
+    return model
 
-    
+
+def detect_pose(img_output_list, anchor_poses, njts, model: LCRNet):
+    """
+    detect poses in a list of image
+    img_output_list: list of couple (path_to_image, path_to_outputfile)
+    ckpt_fname: path to the model weights
+    cfg_dict: directory of configuration
+    anchor_poses: file containing the anchor_poses or directly the anchor poses
+    njts: number of joints in the model
+    gpuid: -1 for using cpu mode, otherwise device_id
+    """
     output = []
     # iterate over image 
     for imgname, outputname in img_output_list:
         print('processing '+imgname)
         # load the images and prepare the blob
         im = cv2.imread( imgname )        
-        inputs, im_scale = _get_blobs(im, None, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE) # prepare blobs    
+        inputs, im_scale = _get_blobs(im, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE) # prepare blobs
 
         # forward
         if cfg.FPN.MULTILEVEL_ROIS and not cfg.MODEL.FASTER_RCNN: 
