@@ -47,41 +47,36 @@ class SkeletonDetector:
 
     def detect_skeletons(self, image: np.ndarray) -> Tuple[List[Skeleton], np.ndarray]:
         """
-        Detect 3D skeletons in an RGB image using OpenPose.
+        Detect 3D skeletons in an RGB image using LCR-Net.
 
         :param image:   The RGB image.
         :return:        A tuple consisting of the detected 3D skeletons and the LCR-Net visualisation of what
                         it detected.
         """
-        pass
-
-    def detect(self, imagename: str) -> None:
-        img_output_list = [cv2.imread(imagename)]
-
-        # run lcrnet on a list of images
         model: LCRNet = make_model(self.__model, self.__cfg, self.__njts, self.__gpuid)
-        res = detect_pose(img_output_list, self.__anchor_poses, self.__njts, model)
+        res = detect_pose([image], self.__anchor_poses, self.__njts, model)
 
         projMat_block_diag, M = scene.get_matrices(self.__projmat, self.__njts)
 
-        for i, image in enumerate(img_output_list):  # for each image
-            resolution = image.shape[:2]
+        i = 0
 
-            # perform postprocessing
-            print('postprocessing (PPI) on image ', i)
-            detections = LCRNet_PPI(res[i], self.__K, resolution, J=self.__njts, **self.__ppi_params)
+        resolution = image.shape[:2]
 
-            # move 3d pose into scene coordinates
-            print('3D scene coordinates regression on image ', i)
-            for detection in detections:
-                delta3d = scene.compute_reproj_delta_3d(detection, projMat_block_diag, M, self.__njts)
-                detection['pose3d'][:  self.__njts] += delta3d[0]
-                detection['pose3d'][self.__njts:2 * self.__njts] += delta3d[1]
-                detection['pose3d'][2 * self.__njts:3 * self.__njts] -= delta3d[2]
+        # perform postprocessing
+        print('postprocessing (PPI) on image ', i)
+        detections = LCRNet_PPI(res[i], self.__K, resolution, J=self.__njts, **self.__ppi_params)
 
-            # show results
-            print('displaying results of image ', i)
-            display_poses(image[:, :, [2, 1, 0]], detections, self.__njts)
+        # move 3d pose into scene coordinates
+        print('3D scene coordinates regression on image ', i)
+        for detection in detections:
+            delta3d = scene.compute_reproj_delta_3d(detection, projMat_block_diag, M, self.__njts)
+            detection['pose3d'][:  self.__njts] += delta3d[0]
+            detection['pose3d'][self.__njts:2 * self.__njts] += delta3d[1]
+            detection['pose3d'][2 * self.__njts:3 * self.__njts] -= delta3d[2]
+
+        # show results
+        print('displaying results of image ', i)
+        display_poses(image[:, :, [2, 1, 0]], detections, self.__njts)
 
     # PRIVATE METHODS
 
