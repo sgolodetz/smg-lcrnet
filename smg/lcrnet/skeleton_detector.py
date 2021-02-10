@@ -56,7 +56,7 @@ class SkeletonDetector:
         pass
 
     def detect(self, imagename: str) -> None:
-        img_output_list = [(imagename, None)]
+        img_output_list = [imagename]
 
         # run lcrnet on a list of images
         model: LCRNet = make_model(self.__model, self.__cfg, self.__njts, self.__gpuid)
@@ -65,7 +65,7 @@ class SkeletonDetector:
         # projmat = np.load(os.path.join(os.path.dirname(__file__), 'standard_projmat.npy'))
         projMat_block_diag, M = scene.get_matrices(self.__projmat, self.__njts)
 
-        for i, (imname, _) in enumerate(img_output_list):  # for each image
+        for i, imname in enumerate(img_output_list):  # for each image
             image = np.asarray(Image.open(imname))
             resolution = image.shape[:2]
 

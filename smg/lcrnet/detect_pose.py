@@ -81,7 +81,7 @@ def detect_pose(img_output_list, anchor_poses, njts, model: LCRNet):
     """
     output = []
     # iterate over image 
-    for imgname, outputname in img_output_list:
+    for imgname in img_output_list:
         print('processing '+imgname)
         # load the images and prepare the blob
         im = cv2.imread( imgname )        
@@ -143,9 +143,5 @@ def detect_pose(img_output_list, anchor_poses, njts, model: LCRNet):
                   'rois': boxes,
                  }
         output.append( tosave )
-        if outputname is not None:
-          outputdir = os.path.dirname(outputname)
-          if len(outputdir)>0 and not os.path.isdir(outputdir): os.system('mkdir -p '+os.path.dirname(outputname))
-          savemat(outputname, tosave, do_compression=True)
+
     return output
-        
