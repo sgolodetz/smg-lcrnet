@@ -41,19 +41,19 @@ class SkeletonDetector:
 
         # Specify the keypoint names.
         self.__keypoint_names: Dict[int, str] = {
-            0: "RFoot",
-            1: "LFoot",
+            0: "RAnkle",
+            1: "LAnkle",
             2: "RKnee",
             3: "LKnee",
             4: "RHip",
             5: "LHip",
-            6: "RHand",
-            7: "LHand",
+            6: "RWrist",
+            7: "LWrist",
             8: "RElbow",
             9: "LElbow",
             10: "RShoulder",
             11: "LShoulder",
-            12: "Head",
+            12: "Nose",
 
             # Virtual keypoints added by smg-lcrnet (to ensure that bones always join keypoints)
             13: "Neck",
