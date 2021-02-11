@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pickle
@@ -9,7 +10,6 @@ from collections import OrderedDict
 from PIL import Image
 from typing import Any, Dict, List, Tuple
 
-from smg.external.lcrnet.demo import display_poses
 from smg.external.lcrnet.lcr_net_ppi import LCRNet_PPI
 
 # FIXME: Make importing from Detectron.pytorch cleaner.
@@ -77,7 +77,7 @@ class SkeletonDetector:
 
         # show results
         print('displaying results of image ', i)
-        display_poses(image[:, :, [2, 1, 0]], detections, self.__njts)
+        SkeletonDetector.__display_poses(image[:, :, [2, 1, 0]], detections, self.__njts)
 
     # PRIVATE METHODS
 
@@ -106,3 +106,114 @@ class SkeletonDetector:
     #     model = mynn.DataParallel(model, cpu_keywords=['im_info', 'roidb'], minibatch=True, device_ids=[0])
     #     model.eval()
     #     return model
+
+    # PRIVATE STATIC METHODS
+
+    @staticmethod
+    def __display_poses(image, detections, njts):
+        if njts == 13:
+            left = [(9, 11), (7, 9), (1, 3), (3, 5)]  # bones on the left
+            right = [(0, 2), (2, 4), (8, 10), (6, 8)]  # bones on the right
+            right += [(4, 5), (10, 11)]  # bones on the torso
+            # (manually add bone between middle of 4,5 to middle of 10,11, and middle of 10,11 and 12)
+            head = 12
+        elif njts == 17:
+            left = [(9, 11), (7, 9), (1, 3), (3, 5)]  # bones on the left
+            right = [(0, 2), (2, 4), (8, 10), (6, 8)]  # bones on the right and the center
+            right += [(4, 13), (5, 13), (13, 14), (14, 15), (15, 16), (12, 16), (10, 15),
+                      (11, 15)]  # bones on the torso
+            head = 16
+
+        fig = plt.figure()
+
+        # 2D
+        ax = fig.add_subplot(211)
+        ax.imshow(image)
+        for det in detections:
+            pose2d = det['pose2d']
+            score = det['cumscore']
+            lw = 2
+            # draw green lines on the left side
+            for i, j in left:
+                ax.plot([pose2d[i], pose2d[j]], [pose2d[i + njts], pose2d[j + njts]], 'g', scalex=None, scaley=None,
+                        lw=lw)
+            # draw blue linse on the right side and center
+            for i, j in right:
+                ax.plot([pose2d[i], pose2d[j]], [pose2d[i + njts], pose2d[j + njts]], 'b', scalex=None, scaley=None,
+                        lw=lw)
+            if njts == 13:  # other bones on torso for 13 jts
+                def avgpose2d(a, b, offset=0):  # return the coordinate of the middle of joint of index a and b
+                    return (pose2d[a + offset] + pose2d[b + offset]) / 2.0
+
+                ax.plot([avgpose2d(4, 5), avgpose2d(10, 11)],
+                        [avgpose2d(4, 5, offset=njts), avgpose2d(10, 11, offset=njts)], 'b', scalex=None, scaley=None,
+                        lw=lw)
+                ax.plot([avgpose2d(12, 12), avgpose2d(10, 11)],
+                        [avgpose2d(12, 12, offset=njts), avgpose2d(10, 11, offset=njts)], 'b', scalex=None, scaley=None,
+                        lw=lw)
+                # put red markers for all joints
+            ax.plot(pose2d[0:njts], pose2d[njts:2 * njts], color='r', marker='.', linestyle='None', scalex=None,
+                    scaley=None)
+            # legend and ticks
+            ax.text(pose2d[head] - 20, pose2d[head + njts] - 20, '%.1f' % (score), color='blue')
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        # 3D
+        ax = fig.add_subplot(212, projection='3d')
+        for i, det in enumerate(detections):
+            pose3d = det['pose3d']
+            score = det['cumscore']
+            lw = 2
+
+            def get_pair(i, j, offset):
+                return [pose3d[i + offset], pose3d[j + offset]]
+
+            def get_xyz_coord(i, j):
+                return get_pair(i, j, 0), get_pair(i, j, njts), get_pair(i, j, njts * 2)
+
+            # draw green lines on the left side
+            for i, j in left:
+                x, y, z = get_xyz_coord(i, j)
+                ax.plot(x, y, z, 'g', scalex=None, scaley=None, lw=lw)
+            # draw blue linse on the right side and center
+            for i, j in right:
+                x, y, z = get_xyz_coord(i, j)
+                ax.plot(x, y, z, 'b', scalex=None, scaley=None, lw=lw)
+            if njts == 13:  # other bones on torso for 13 jts
+                def avgpose3d(a, b, offset=0):
+                    return (pose3d[a + offset] + pose3d[b + offset]) / 2.0
+
+                def get_avgpair(i1, i2, j1, j2, offset):
+                    return [avgpose3d(i1, i2, offset), avgpose3d(j1, j2, offset)]
+
+                def get_xyz_avgcoord(i1, i2, j1, j2):
+                    return get_avgpair(i1, i2, j1, j2, 0), get_avgpair(i1, i2, j1, j2, njts), get_avgpair(i1, i2, j1,
+                                                                                                          j2, njts * 2)
+
+                x, y, z = get_xyz_avgcoord(4, 5, 10, 11)
+                ax.plot(x, y, z, 'b', scalex=None, scaley=None, lw=lw)
+                x, y, z = get_xyz_avgcoord(12, 12, 10, 11)
+                ax.plot(x, y, z, 'b', scalex=None, scaley=None, lw=lw)
+            # put red markers for all joints
+            ax.plot(pose3d[0:njts], pose3d[njts:2 * njts], pose3d[2 * njts:3 * njts], color='r', marker='.',
+                    linestyle='None', scalex=None, scaley=None)
+            # score
+            ax.text(pose3d[head] + 0.1, pose3d[head + njts] + 0.1, pose3d[head + 2 * njts], '%.1f' % (score),
+                    color='blue')
+        # legend and ticks
+        ax.set_aspect('auto')
+        ax.elev = -90
+        ax.azim = 90
+        ax.dist = 8
+        ax.set_xlabel('X axis', labelpad=-5)
+        ax.set_ylabel('Y axis', labelpad=-5)
+        ax.set_zlabel('Z axis', labelpad=-5)
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+        ax.set_zticklabels([])
+
+        # plt.show()
+        plt.savefig("foo.png")
+        points = pose3d.reshape(3, njts).transpose()
+        print(points)
