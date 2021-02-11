@@ -39,6 +39,37 @@ class SkeletonDetector:
         self.__model_dir: str = os.path.join(os.path.dirname(__file__), "../external/lcrnet/models")
         self.__model_name: str = model_name
 
+        # Specify the keypoint names.
+        self.__keypoint_names: Dict[int, str] = {
+            0: "RFoot",
+            1: "LFoot",
+            2: "RKnee",
+            3: "LKnee",
+            4: "RHip",
+            5: "LHip",
+            6: "RHand",
+            7: "LHand",
+            8: "RElbow",
+            9: "LElbow",
+            10: "RShoulder",
+            11: "LShoulder",
+            12: "Head",
+
+            # Virtual keypoints added by smg-lcrnet (to ensure that bones always join keypoints)
+            13: "Neck",
+            14: "MidHip"
+        }
+
+        # Specify which keypoints are joined to form bones.
+        self.__keypoint_pairs: List[Tuple[str, str]] = [
+            (self.__keypoint_names[i], self.__keypoint_names[j]) for i, j in [
+                (0, 2), (1, 3), (2, 4), (3, 5), (4, 5), (6, 8), (7, 9), (8, 10), (9, 11), (10, 11), (12, 13), (13, 14)
+            ]
+        ]
+
+        print(self.__keypoint_pairs)
+
+        # Load the model and make the network.
         self.__anchor_poses: np.ndarray = self.__load_pickle("anchor_poses")
         self.__cfg: AttrDict = self.__load_pickle("cfg")
         self.__model: OrderedDict = torch.load(os.path.join(self.__model_dir, f"{model_name}_model.pth.tgz"))
@@ -47,11 +78,12 @@ class SkeletonDetector:
         self.__K: int = self.__anchor_poses.shape[0]
         self.__njts: int = self.__anchor_poses.shape[1] // 5  # 5 = 2D + 3D
 
+        self.__net: LCRNet = SkeletonDetector.__make_model(self.__model, self.__cfg, self.__njts, self.__gpuid)
+
+        # TODO: Comment here.
         self.__projmat: np.ndarray = np.load(
             os.path.join(os.path.dirname(__file__), "../external/lcrnet/standard_projmat.npy")
         )
-
-        self.__net: LCRNet = SkeletonDetector.__make_model(self.__model, self.__cfg, self.__njts, self.__gpuid)
 
     # PUBLIC METHODS
 
@@ -84,14 +116,30 @@ class SkeletonDetector:
             detection['pose3d'][2 * self.__njts:3 * self.__njts] -= delta3d[2]
 
         # Make the skeletons.
+        skeletons: List[Skeleton] = []
         for detection in detections:
-            points: np.ndarray = detection["pose3d"].reshape(3, self.__njts).transpose()
-            print(points)
+            detected_keypoints: np.ndarray = detection["pose3d"].reshape(3, self.__njts).transpose()
+            skeleton_keypoints: Dict[str, Skeleton.Keypoint] = {}
+
+            for i in range(detected_keypoints.shape[0]):
+                name: str = self.__keypoint_names[i]
+                position: np.ndarray = detected_keypoints[i, :]
+                skeleton_keypoints[name] = Skeleton.Keypoint(name, position)
+
+            skeleton_keypoints["MidHip"] = Skeleton.Keypoint(
+                "MidHip", (skeleton_keypoints["LHip"].position + skeleton_keypoints["RHip"].position) / 2
+            )
+
+            skeleton_keypoints["Neck"] = Skeleton.Keypoint(
+                "Neck", (skeleton_keypoints["LShoulder"].position + skeleton_keypoints["RShoulder"].position) / 2
+            )
+
+            skeletons.append(Skeleton(skeleton_keypoints, self.__keypoint_pairs))
 
         # Make LCR-Net's visualisation of the results.
         output_image: np.ndarray = SkeletonDetector.__display_poses(image[:, :, [2, 1, 0]], detections, self.__njts)
 
-        return [], output_image
+        return skeletons, output_image
 
     # PRIVATE METHODS
 

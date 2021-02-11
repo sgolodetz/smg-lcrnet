@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 
+from pprint import pprint
 from timeit import default_timer as timer
 from typing import Optional
 
@@ -21,6 +22,8 @@ def main() -> None:
         skeletons, output_image = skeleton_detector.detect_skeletons(image)
         end = timer()
         print(f"Time: {end - start}s")
+
+        pprint(skeletons)
 
         cv2.imshow("Output Image", output_image)
         cv2.waitKey(1)
