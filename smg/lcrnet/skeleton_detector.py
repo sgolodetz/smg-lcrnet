@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Tuple
 from smg.external.lcrnet.lcr_net_ppi import LCRNet_PPI
 
 # FIXME: Make importing from Detectron.pytorch cleaner.
+from core.config import _merge_a_into_b
 from utils.collections import AttrDict
 
 # FIXME: This is bad, and should be refactored out gradually.
@@ -43,7 +44,7 @@ class SkeletonDetector:
             os.path.join(os.path.dirname(__file__), "../external/lcrnet/standard_projmat.npy")
         )
 
-        self.__net: LCRNet = make_model(self.__model, self.__cfg, self.__njts, self.__gpuid)
+        self.__net: LCRNet = SkeletonDetector.__make_model(self.__model, self.__cfg, self.__njts, self.__gpuid)
 
     # PUBLIC METHODS
 
@@ -85,27 +86,6 @@ class SkeletonDetector:
         filename: str = os.path.join(self.__model_dir, f"{self.__model_name}_{specifier}.pkl")
         with open(filename, "rb") as f:
             return pickle.load(f)
-
-    # def __make_model(ckpt, cfg_dict, njts: int, gpuid: int) -> LCRNet:
-    #     # load the anchor poses and the network
-    #     if gpuid >= 0:
-    #         assert torch.cuda.is_available(), "You should launch the script on cpu if cuda is not available"
-    #         torch.device('cuda:0')
-    #     else:
-    #         torch.device('cpu')
-    #
-    #     # load config and network
-    #     print('loading the model')
-    #     _merge_a_into_b(cfg_dict, cfg)
-    #     cfg.MODEL.LOAD_IMAGENET_PRETRAINED_WEIGHTS = False
-    #     cfg.CUDA = gpuid >= 0
-    #     assert_and_infer_cfg()
-    #     model = LCRNet(njts)
-    #     if cfg.CUDA: model.cuda()
-    #     net_utils.load_ckpt(model, ckpt)
-    #     model = mynn.DataParallel(model, cpu_keywords=['im_info', 'roidb'], minibatch=True, device_ids=[0])
-    #     model.eval()
-    #     return model
 
     # PRIVATE STATIC METHODS
 
@@ -217,3 +197,25 @@ class SkeletonDetector:
         plt.savefig("foo.png")
         points = pose3d.reshape(3, njts).transpose()
         print(points)
+
+    @staticmethod
+    def __make_model(ckpt, cfg_dict, njts: int, gpuid: int) -> LCRNet:
+        # load the anchor poses and the network
+        if gpuid >= 0:
+            assert torch.cuda.is_available(), "You should launch the script on cpu if cuda is not available"
+            torch.device('cuda:0')
+        else:
+            torch.device('cpu')
+
+        # load config and network
+        print('loading the model')
+        _merge_a_into_b(cfg_dict, cfg)
+        cfg.MODEL.LOAD_IMAGENET_PRETRAINED_WEIGHTS = False
+        cfg.CUDA = gpuid >= 0
+        assert_and_infer_cfg()
+        model = LCRNet(njts)
+        if cfg.CUDA: model.cuda()
+        net_utils.load_ckpt(model, ckpt)
+        model = mynn.DataParallel(model, cpu_keywords=['im_info', 'roidb'], minibatch=True, device_ids=[0])
+        model.eval()
+        return model

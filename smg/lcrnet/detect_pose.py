@@ -47,28 +47,6 @@ def _get_blobs(im, target_scale, target_max_size):
     return blobs, im_scale
 
 
-def make_model(ckpt, cfg_dict, njts: int, gpuid: int) -> LCRNet:
-    # load the anchor poses and the network
-    if gpuid >= 0:
-        assert torch.cuda.is_available(), "You should launch the script on cpu if cuda is not available"
-        torch.device('cuda:0')
-    else:
-        torch.device('cpu')
-
-    # load config and network
-    print('loading the model')
-    _merge_a_into_b(cfg_dict, cfg)
-    cfg.MODEL.LOAD_IMAGENET_PRETRAINED_WEIGHTS = False
-    cfg.CUDA = gpuid >= 0
-    assert_and_infer_cfg()
-    model = LCRNet(njts)
-    if cfg.CUDA: model.cuda()
-    net_utils.load_ckpt(model, ckpt)
-    model = mynn.DataParallel(model, cpu_keywords=['im_info', 'roidb'], minibatch=True, device_ids=[0])
-    model.eval()
-    return model
-
-
 def detect_pose(img_output_list, anchor_poses, njts, model: LCRNet):
     """
     detect poses in a list of image
