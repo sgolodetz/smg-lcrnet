@@ -83,9 +83,15 @@ class SkeletonDetector:
             detection['pose3d'][self.__njts:2 * self.__njts] += delta3d[1]
             detection['pose3d'][2 * self.__njts:3 * self.__njts] -= delta3d[2]
 
-        # show results
-        print('displaying results of image ', i)
-        SkeletonDetector.__display_poses(image[:, :, [2, 1, 0]], detections, self.__njts)
+        # Make the skeletons.
+        for detection in detections:
+            points: np.ndarray = detection["pose3d"].reshape(3, self.__njts).transpose()
+            print(points)
+
+        # Make LCR-Net's visualisation of the results.
+        visualisation: np.ndarray = SkeletonDetector.__display_poses(image[:, :, [2, 1, 0]], detections, self.__njts)
+        cv2.imshow("LCR-Net Visualisation", visualisation)
+        cv2.waitKey()
 
     # PRIVATE METHODS
 
@@ -182,7 +188,7 @@ class SkeletonDetector:
         return output
 
     @staticmethod
-    def __display_poses(image, detections, njts):
+    def __display_poses(image, detections, njts) -> np.ndarray:
         if njts == 13:
             left = [(9, 11), (7, 9), (1, 3), (3, 5)]  # bones on the left
             right = [(0, 2), (2, 4), (8, 10), (6, 8)]  # bones on the right
@@ -285,19 +291,17 @@ class SkeletonDetector:
         ax.set_yticklabels([])
         ax.set_zticklabels([])
 
-        points = pose3d.reshape(3, njts).transpose()
-        print(points)
-
-        with io.BytesIO() as io_buf:
-            fig.savefig(io_buf, format='rgba')
-            io_buf.seek(0)
+        # Convert the pyplot figure to a BGR image.
+        # See also: https://stackoverflow.com/questions/7821518/matplotlib-save-plot-to-numpy-array
+        with io.BytesIO() as buffer:
+            fig.savefig(buffer, format='rgba')
+            buffer.seek(0)
             output_image: np.ndarray = np.reshape(
-                np.frombuffer(io_buf.getvalue(), dtype=np.uint8),
+                np.frombuffer(buffer.getvalue(), dtype=np.uint8),
                 newshape=(int(fig.bbox.bounds[3]), int(fig.bbox.bounds[2]), -1)
             )[:, :, [2, 1, 0]]
 
-        cv2.imshow("Output Image", output_image)
-        cv2.waitKey()
+        return output_image
 
     @staticmethod
     def __get_blobs(im, target_scale, target_max_size):
