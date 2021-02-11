@@ -87,13 +87,13 @@ class SkeletonDetector:
 
     # PUBLIC METHODS
 
-    def detect_skeletons(self, image: np.ndarray) -> Tuple[List[Skeleton], np.ndarray]:
+    def detect_skeletons(self, image: np.ndarray, *, visualise: bool = False) -> Tuple[List[Skeleton], np.ndarray]:
         """
         Detect 3D skeletons in an RGB image using LCR-Net.
 
-        :param image:   The RGB image.
-        :return:        A tuple consisting of the detected 3D skeletons and the LCR-Net visualisation of what
-                        it detected.
+        :param image:       The RGB image.
+        :param visualise:   Whether to make the output visualisation.
+        :return:            A tuple consisting of the detected 3D skeletons and the output visualisation (if requested).
         """
         res = SkeletonDetector.__detect_pose([image], self.__anchor_poses, self.__njts, self.__net)
 
@@ -136,8 +136,9 @@ class SkeletonDetector:
 
             skeletons.append(Skeleton(skeleton_keypoints, self.__keypoint_pairs))
 
-        # Make LCR-Net's visualisation of the results.
-        output_image: np.ndarray = SkeletonDetector.__display_poses(image[:, :, [2, 1, 0]], detections, self.__njts)
+        # If requested, make the output visualisation. Otherwise, just use the input image.
+        output_image: np.ndarray = SkeletonDetector.__display_poses(image[:, :, [2, 1, 0]], detections, self.__njts) \
+            if visualise else image
 
         return skeletons, output_image
 
@@ -348,6 +349,8 @@ class SkeletonDetector:
                 np.frombuffer(buffer.getvalue(), dtype=np.uint8),
                 newshape=(int(fig.bbox.bounds[3]), int(fig.bbox.bounds[2]), -1)
             )[:, :, [2, 1, 0]]
+
+        plt.close(fig)
 
         return output_image
 

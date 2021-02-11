@@ -19,7 +19,7 @@ def main() -> None:
             break
 
         start = timer()
-        skeletons, output_image = skeleton_detector.detect_skeletons(image)
+        skeletons, output_image = skeleton_detector.detect_skeletons(image, visualise=False)
         end = timer()
         print(f"Time: {end - start}s")
 
