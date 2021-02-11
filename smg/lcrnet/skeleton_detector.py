@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import nn as mynn
 import numpy as np
 import os
 import pickle
@@ -6,18 +7,21 @@ import torch
 
 import smg.external.lcrnet.scene as scene
 
+# FIXME: Make importing from Detectron.pytorch cleaner.
+import utils.net as net_utils
+
 from collections import OrderedDict
-from PIL import Image
 from typing import Any, Dict, List, Tuple
 
+from smg.external.lcrnet.lcrnet_model import LCRNet
 from smg.external.lcrnet.lcr_net_ppi import LCRNet_PPI
 
 # FIXME: Make importing from Detectron.pytorch cleaner.
-from core.config import _merge_a_into_b
+from core.config import assert_and_infer_cfg, cfg, _merge_a_into_b
 from utils.collections import AttrDict
 
 # FIXME: This is bad, and should be refactored out gradually.
-from .detect_pose import *
+from .detect_pose import detect_pose
 
 from .skeleton import Skeleton
 

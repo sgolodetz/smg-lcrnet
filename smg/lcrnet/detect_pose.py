@@ -17,26 +17,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>"""
 from __future__ import print_function
 import os, sys
 import numpy as np
-from scipy.io import savemat
-import h5py 
 import cv2
 
 
 import torch
 from torch.autograd import Variable
-import torch.nn as nn
 import torch.backends.cudnn as cudnn
 cudnn.benchmark = True
 cv2.setNumThreads(0)  # pytorch issue 1355: possible deadlock in dataloader
 sys.path.insert(0, os.path.join( os.path.dirname(__file__),"Detectron.pytorch/lib"))
-from core.config import cfg, cfg_from_file, assert_and_infer_cfg, _merge_a_into_b
-import utils.net as net_utils
+from core.config import cfg
 import utils.blob as blob_utils
-import nn as mynn
 
 from lcrnet_model import LCRNet
-
-NT = 5       # 2D + 3D 
 
 
 def _get_blobs(im, target_scale, target_max_size):
@@ -57,6 +50,8 @@ def detect_pose(img_output_list, anchor_poses, njts, model: LCRNet):
     njts: number of joints in the model
     gpuid: -1 for using cpu mode, otherwise device_id
     """
+    NT = 5  # 2D + 3D
+
     output = []
     # iterate over image
     for i, im in enumerate(img_output_list):
