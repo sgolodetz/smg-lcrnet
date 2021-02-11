@@ -8,10 +8,11 @@ import pygame
 from OpenGL.GL import *
 from pprint import pprint
 from timeit import default_timer as timer
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 from smg.lcrnet import Skeleton, SkeletonDetector, SkeletonRenderer
 from smg.opengl import OpenGLMatrixContext, OpenGLUtil
+from smg.openni import OpenNICamera
 from smg.rigging.cameras import SimpleCamera
 from smg.rigging.controllers import KeyboardCameraController
 from smg.rigging.helpers import CameraPoseConverter
@@ -36,65 +37,63 @@ def main() -> None:
     )
 
     skeleton_detector: SkeletonDetector = SkeletonDetector(model_name="DEMO_ECCV18")
-    frame_idx: int = 0
     skeletons: List[Skeleton] = []
-    while True:
-        # Process any PyGame events.
-        for event in pygame.event.get():
-            # If the user wants us to quit:
-            if event.type == pygame.QUIT:
-                # Shut down pygame, and destroy any OpenCV windows.
-                pygame.quit()
-                cv2.destroyAllWindows()
 
-                # Forcibly terminate the whole process. This isn't graceful, but ORB-SLAM can sometimes
-                # take a long time to shut down, and it's dull to wait for it.
-                # TODO: Update this comment.
-                # noinspection PyProtectedMember
-                os._exit(0)
+    # Construct the camera.
+    with OpenNICamera(mirror_images=True) as camera:
+        # Repeatedly:
+        while True:
+            # Process any PyGame events.
+            for event in pygame.event.get():
+                # If the user wants us to quit:
+                if event.type == pygame.QUIT:
+                    # Shut down pygame, and destroy any OpenCV windows.
+                    pygame.quit()
+                    cv2.destroyAllWindows()
 
-        filename: str = f"C:/smglib/smg-mapping/output-skeleton/frame-{frame_idx:06d}.color.png"
-        frame_idx += 1
+                    # Forcibly terminate the whole process. This isn't graceful, but ORB-SLAM can sometimes
+                    # take a long time to shut down, and it's dull to wait for it.
+                    # TODO: Update this comment.
+                    # noinspection PyProtectedMember
+                    os._exit(0)
 
-        image: Optional[np.ndarray] = cv2.imread(filename)
-        if image is not None:
+            colour_image, depth_image = camera.get_images()
+
             start = timer()
-            skeletons, output_image = skeleton_detector.detect_skeletons(image, visualise=False)
+            skeletons, output_image = skeleton_detector.detect_skeletons(colour_image, visualise=False)
             end = timer()
             print(f"Time: {end - start}s")
 
             pprint(skeletons)
 
             cv2.imshow("Output Image", output_image)
+            cv2.waitKey(1)
 
-        cv2.waitKey(1)
+            # Allow the user to control the camera.
+            camera_controller.update(pygame.key.get_pressed(), timer() * 1000)
 
-        # Allow the user to control the camera.
-        camera_controller.update(pygame.key.get_pressed(), timer() * 1000)
+            # Clear the colour and depth buffers.
+            glClearColor(1.0, 1.0, 1.0, 1.0)
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-        # Clear the colour and depth buffers.
-        glClearColor(1.0, 1.0, 1.0, 1.0)
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-
-        # Set the projection matrix.
-        intrinsics: Tuple[float, float, float, float] = (532.5694641250893, 531.5410880910171, 320.0, 240.0)
-        with OpenGLMatrixContext(GL_PROJECTION, lambda: OpenGLUtil.set_projection_matrix(
-            intrinsics, *window_size
-        )):
-            # Set the model-view matrix.
-            with OpenGLMatrixContext(GL_MODELVIEW, lambda: OpenGLUtil.load_matrix(
-                CameraPoseConverter.pose_to_modelview(camera_controller.get_pose())
+            # Set the projection matrix.
+            with OpenGLMatrixContext(GL_PROJECTION, lambda: OpenGLUtil.set_projection_matrix(
+                camera.get_colour_intrinsics(), *window_size
             )):
-                # Render a voxel grid.
-                glColor3f(0.0, 0.0, 0.0)
-                OpenGLUtil.render_voxel_grid([-2, -2, -2], [2, 0, 2], [1, 1, 1], dotted=True)
+                # Set the model-view matrix.
+                with OpenGLMatrixContext(GL_MODELVIEW, lambda: OpenGLUtil.load_matrix(
+                    CameraPoseConverter.pose_to_modelview(camera_controller.get_pose())
+                )):
+                    # Render a voxel grid.
+                    glColor3f(0.0, 0.0, 0.0)
+                    OpenGLUtil.render_voxel_grid([-2, -2, -2], [2, 0, 2], [1, 1, 1], dotted=True)
 
-                # # Render the 3D skeletons.
-                for skeleton in skeletons:
-                    SkeletonRenderer.render_skeleton(skeleton)
+                    # Render the 3D skeletons.
+                    for skeleton in skeletons:
+                        SkeletonRenderer.render_skeleton(skeleton)
 
-        # Swap the front and back buffers.
-        pygame.display.flip()
+            # Swap the front and back buffers.
+            pygame.display.flip()
 
 
 if __name__ == "__main__":

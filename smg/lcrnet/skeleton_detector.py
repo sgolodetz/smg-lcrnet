@@ -207,7 +207,7 @@ class SkeletonDetector:
             scores = return_dict['cls_score'].data.cpu().numpy().squeeze()
             scores = scores.reshape([-1, scores.shape[-1]])  # In case there is 1 proposal
             # get pose_deltas
-            pose_deltas = return_dict['pose_pred'].data.cpu().numpy().squeeze()
+            pose_deltas = return_dict['pose_pred'].data.cpu().numpy()
             # project poses on boxes
             boxes_size = boxes[:, 2:4] - boxes[:, 0:2]
             offset = np.concatenate((boxes[:, :2], np.zeros((boxes.shape[0], 3), dtype=np.float32)),
