@@ -43,6 +43,8 @@ class SkeletonDetector:
             os.path.join(os.path.dirname(__file__), "../external/lcrnet/standard_projmat.npy")
         )
 
+        self.__net: LCRNet = make_model(self.__model, self.__cfg, self.__njts, self.__gpuid)
+
     # PUBLIC METHODS
 
     def detect_skeletons(self, image: np.ndarray) -> Tuple[List[Skeleton], np.ndarray]:
@@ -53,8 +55,7 @@ class SkeletonDetector:
         :return:        A tuple consisting of the detected 3D skeletons and the LCR-Net visualisation of what
                         it detected.
         """
-        model: LCRNet = make_model(self.__model, self.__cfg, self.__njts, self.__gpuid)
-        res = detect_pose([image], self.__anchor_poses, self.__njts, model)
+        res = detect_pose([image], self.__anchor_poses, self.__njts, self.__net)
 
         projMat_block_diag, M = scene.get_matrices(self.__projmat, self.__njts)
 
