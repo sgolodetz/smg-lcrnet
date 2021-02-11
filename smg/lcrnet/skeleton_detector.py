@@ -1,4 +1,3 @@
-import cv2
 import io
 import matplotlib.pyplot as plt
 import nn as mynn
@@ -16,6 +15,7 @@ import utils.blob as blob_utils
 import utils.net as net_utils
 
 from collections import OrderedDict
+from timeit import default_timer as timer
 from torch.autograd import Variable
 from typing import Any, Dict, List, Tuple
 
@@ -110,7 +110,10 @@ class SkeletonDetector:
         :param visualise:   Whether to make the output visualisation.
         :return:            A tuple consisting of the detected 3D skeletons and the output visualisation (if requested).
         """
+        start = timer()
         res = SkeletonDetector.__detect_pose([image], self.__anchor_poses, self.__njts, self.__net)
+        end = timer()
+        print(f"  Detection Time: {end - start}s")
 
         projMat_block_diag, M = scene.get_matrices(self.__projmat, self.__njts)
 
@@ -119,16 +122,20 @@ class SkeletonDetector:
         resolution = image.shape[:2]
 
         # perform postprocessing
-        print('postprocessing (PPI) on image ', i)
+        start = timer()
         detections = LCRNet_PPI(res[i], self.__K, resolution, J=self.__njts, **self.__ppi_params)
+        end = timer()
+        print(f"  Postprocessing Time: {end - start}s")
 
         # move 3d pose into scene coordinates
-        print('3D scene coordinates regression on image ', i)
+        start = timer()
         for detection in detections:
             delta3d = scene.compute_reproj_delta_3d(detection, projMat_block_diag, M, self.__njts)
             detection['pose3d'][:  self.__njts] += delta3d[0]
             detection['pose3d'][self.__njts:2 * self.__njts] += delta3d[1]
             detection['pose3d'][2 * self.__njts:3 * self.__njts] -= delta3d[2]
+        end = timer()
+        print(f"  3D Scene Coordinate Regression Time: {end - start}s")
 
         # Make the skeletons.
         skeletons: List[Skeleton] = []

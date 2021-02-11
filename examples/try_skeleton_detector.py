@@ -37,7 +37,6 @@ def main() -> None:
     )
 
     skeleton_detector: SkeletonDetector = SkeletonDetector(model_name="DEMO_ECCV18")
-    skeletons: List[Skeleton] = []
 
     # Construct the camera.
     with OpenNICamera(mirror_images=True) as camera:
@@ -62,9 +61,7 @@ def main() -> None:
             start = timer()
             skeletons, output_image = skeleton_detector.detect_skeletons(colour_image, visualise=False)
             end = timer()
-            print(f"Time: {end - start}s")
-
-            pprint(skeletons)
+            print(f"Total Time: {end - start}s")
 
             cv2.imshow("Output Image", output_image)
             cv2.waitKey(1)
