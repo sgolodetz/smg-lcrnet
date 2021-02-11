@@ -1,3 +1,5 @@
+import cv2
+import io
 import matplotlib.pyplot as plt
 import nn as mynn
 import numpy as np
@@ -112,7 +114,7 @@ class SkeletonDetector:
         for i, im in enumerate(img_output_list):
             print(f"processing image {i}")
             # prepare the blob
-            inputs, im_scale = SkeletonDetector._get_blobs(im, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE)  # prepare blobs
+            inputs, im_scale = SkeletonDetector.__get_blobs(im, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE)  # prepare blobs
 
             # forward
             if cfg.FPN.MULTILEVEL_ROIS and not cfg.MODEL.FASTER_RCNN:
@@ -283,17 +285,25 @@ class SkeletonDetector:
         ax.set_yticklabels([])
         ax.set_zticklabels([])
 
-        # plt.show()
-        plt.savefig("foo.png")
         points = pose3d.reshape(3, njts).transpose()
         print(points)
 
+        with io.BytesIO() as io_buf:
+            fig.savefig(io_buf, format='rgba')
+            io_buf.seek(0)
+            output_image: np.ndarray = np.reshape(
+                np.frombuffer(io_buf.getvalue(), dtype=np.uint8),
+                newshape=(int(fig.bbox.bounds[3]), int(fig.bbox.bounds[2]), -1)
+            )[:, :, [2, 1, 0]]
+
+        cv2.imshow("Output Image", output_image)
+        cv2.waitKey()
+
     @staticmethod
-    def _get_blobs(im, target_scale, target_max_size):
+    def __get_blobs(im, target_scale, target_max_size):
         """Convert an image and RoIs within that image into network inputs."""
         blobs = {}
-        blobs['data'], im_scale, blobs['im_info'] = \
-            blob_utils.get_image_blob(im, target_scale, target_max_size)
+        blobs['data'], im_scale, blobs['im_info'] = blob_utils.get_image_blob(im, target_scale, target_max_size)
         return blobs, im_scale
 
     @staticmethod
