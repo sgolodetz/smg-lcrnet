@@ -69,10 +69,11 @@ class SkeletonRenderer:
 
         # Render the keypoints themselves, colouring them on a scale according to their score (0 = red, 1 = green).
         for keypoint_name, keypoint in skeleton.keypoints.items():
-            glColor3f(1 - keypoint.score, keypoint.score, 0.0)
+            # glColor3f(1 - keypoint.score, keypoint.score, 0.0)
+            glColor3f(0.0, 1.0, 0.0)
             OpenGLUtil.render_sphere(keypoint.position, 0.03, slices=10, stacks=10)
 
-        # Render the bones between the keypoints.
+        # # Render the bones between the keypoints.
         for keypoint1, keypoint2 in skeleton.bones:
             bone_key: Tuple[str, str] = SkeletonDetector.make_bone_key(keypoint1, keypoint2)
             bone_colour: Optional[np.ndarray] = bone_colours.get(bone_key)

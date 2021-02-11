@@ -63,7 +63,8 @@ class SkeletonDetector:
         # Specify which keypoints are joined to form bones.
         self.__keypoint_pairs: List[Tuple[str, str]] = [
             (self.__keypoint_names[i], self.__keypoint_names[j]) for i, j in [
-                (0, 2), (1, 3), (2, 4), (3, 5), (4, 5), (6, 8), (7, 9), (8, 10), (9, 11), (10, 11), (12, 13), (13, 14)
+                (0, 2), (1, 3), (2, 4), (3, 5), (4, 5), (6, 8), (7, 9), (8, 10), (9, 11), (10, 11),
+                (4, 14), (5, 14), (10, 13), (11, 13), (12, 13), (13, 14)
             ]
         ]
 
@@ -84,6 +85,20 @@ class SkeletonDetector:
         self.__projmat: np.ndarray = np.load(
             os.path.join(os.path.dirname(__file__), "../external/lcrnet/standard_projmat.npy")
         )
+
+    # PUBLIC STATIC METHODS
+
+    @staticmethod
+    def make_bone_key(keypoint1: Skeleton.Keypoint, keypoint2: Skeleton.Keypoint) -> Tuple[str, str]:
+        """
+        Make a key that can be used to look up a bone in a dictionary.
+
+        :param keypoint1:   The keypoint at one end of the bone.
+        :param keypoint2:   The keypoint at the other end of the bone.
+        :return:            The key for the bone.
+        """
+        # noinspection PyTypeChecker
+        return tuple(sorted([keypoint1.name, keypoint2.name]))
 
     # PUBLIC METHODS
 
@@ -124,6 +139,8 @@ class SkeletonDetector:
             for i in range(detected_keypoints.shape[0]):
                 name: str = self.__keypoint_names[i]
                 position: np.ndarray = detected_keypoints[i, :]
+                position[0] *= -1
+                position[1] *= -1
                 skeleton_keypoints[name] = Skeleton.Keypoint(name, position)
 
             skeleton_keypoints["MidHip"] = Skeleton.Keypoint(

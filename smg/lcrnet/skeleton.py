@@ -64,3 +64,23 @@ class Skeleton:
 
     def __repr__(self) -> str:
         return f"Skeleton({self.__keypoints})"
+
+    # PROPERTIES
+
+    @property
+    def bones(self) -> List[Tuple[Keypoint, Keypoint]]:
+        """
+        Get the bones of the skeleton.
+
+        :return:    The bones of the skeleton, as a list of detected keypoint pairs.
+        """
+        return [(self.__keypoints[i], self.__keypoints[j]) for i, j in self.__keypoint_pairs]
+
+    @property
+    def keypoints(self) -> Dict[str, Keypoint]:
+        """
+        Get the detected keypoints of the skeleton.
+
+        :return:    The detected keypoints of the skeleton, as a keypoint name -> keypoint map.
+        """
+        return self.__keypoints
