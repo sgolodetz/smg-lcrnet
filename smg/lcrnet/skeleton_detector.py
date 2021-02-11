@@ -34,7 +34,7 @@ class SkeletonDetector:
 
     # CONSTRUCTOR
 
-    def __init__(self, model_name: str = "InTheWild-ResNet50"):
+    def __init__(self, *, model_name: str = "InTheWild-ResNet50"):
         self.__gpuid: int = 0
         self.__model_dir: str = os.path.join(os.path.dirname(__file__), "../external/lcrnet/models")
         self.__model_name: str = model_name
@@ -89,9 +89,9 @@ class SkeletonDetector:
             print(points)
 
         # Make LCR-Net's visualisation of the results.
-        visualisation: np.ndarray = SkeletonDetector.__display_poses(image[:, :, [2, 1, 0]], detections, self.__njts)
-        cv2.imshow("LCR-Net Visualisation", visualisation)
-        cv2.waitKey()
+        output_image: np.ndarray = SkeletonDetector.__display_poses(image[:, :, [2, 1, 0]], detections, self.__njts)
+
+        return [], output_image
 
     # PRIVATE METHODS
 
