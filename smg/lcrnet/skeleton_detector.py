@@ -120,8 +120,9 @@ class SkeletonDetector:
         self.__model: OrderedDict = torch.load(os.path.join(self.__model_dir, f"{model_name}_model.pth.tgz"))
         self.__ppi_params: Dict[str, Any] = self.__load_pickle("ppi_params")
 
-        self.__K: int = self.__anchor_poses.shape[0]
-        self.__njts: int = self.__anchor_poses.shape[1] // 5  # 5 = 2D + 3D
+        self.__K: int = self.__anchor_poses.shape[0]  # The number of anchor poses (a.k.a. "classes")
+        self.__NT: int = 5  # 2D + 3D
+        self.__njts: int = self.__anchor_poses.shape[1] // self.__NT
 
         self.__net: LCRNet = SkeletonDetector.__make_model(self.__model, self.__cfg, self.__njts, self.__gpu_id)
 
@@ -142,9 +143,9 @@ class SkeletonDetector:
         :param visualise:   Whether to make the output visualisation (can be a bit slow).
         :return:            A tuple consisting of the detected 3D skeletons and the output visualisation (if requested).
         """
-        # Run LCR-Net on the image to get the pose proposals.
+        # Use LCR-Net to make the pose proposals.
         start = timer()
-        res: Dict[str, Any] = self.__detect_pose(image)
+        res: Dict[str, Any] = self.__make_pose_proposals(image)
         end = timer()
         if self.__debug:
             print(f"  Detection Time: {end - start}s")
@@ -199,7 +200,12 @@ class SkeletonDetector:
 
     # PRIVATE METHODS
 
-    def __detect_pose(self, image: np.ndarray) -> Dict[str, Any]:
+    def __load_pickle(self, specifier: str) -> Any:
+        filename: str = os.path.join(self.__model_dir, f"{self.__model_name}_{specifier}.pkl")
+        with open(filename, "rb") as f:
+            return pickle.load(f)
+
+    def __make_pose_proposals(self, image: np.ndarray) -> Dict[str, Any]:
         """
         detect poses in a list of image
         img_output_list: list of couple (path_to_image, path_to_outputfile)
@@ -210,39 +216,72 @@ class SkeletonDetector:
         gpuid: -1 for using cpu mode, otherwise device_id
         """
         # Note: This is a modified version of detect_pose from the LCR-Net code.
-        NT = 5  # 2D + 3D
 
-        # prepare the blob
-        inputs, im_scale = SkeletonDetector.__get_blobs(image, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE)  # prepare blobs
+        # Prepare the image to be passed to the LCR-Net network, scaling it as necessary.
+        inputs, image_scale = SkeletonDetector.__get_blobs(image, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE)
+        # noinspection PyUnresolvedReferences
+        inputs["data"] = [torch.from_numpy(inputs["data"])]
+        # noinspection PyUnresolvedReferences
+        inputs["im_info"] = [torch.from_numpy(inputs["im_info"])]
 
-        # forward
-        inputs['data'] = [torch.from_numpy(inputs['data'])]
-        inputs['im_info'] = [torch.from_numpy(inputs['im_info'])]
+        # Run the LCR-Net network.
         with torch.no_grad():
-            return_dict = self.__net(**inputs)
-        # get boxes
-        rois = return_dict['rois'].data.cpu().numpy()
-        boxes = rois[:, 1:5] / im_scale
-        # get scores
-        scores = return_dict['cls_score'].data.cpu().numpy().squeeze()
+            net_output: Dict[str, torch.Tensor] = self.__net(**inputs)
+
+        # Get the region proposals from the network output and scale them as necessary.
+        rois: np.ndarray = net_output["rois"].data.cpu().numpy()
+        boxes: np.ndarray = rois[:, 1:5] / image_scale
+
+        # Get the class scores for each region proposal (an array of size #boxes x (K + 1)). Each class corresponds
+        # to an anchor pose (or the background). The score for a particular class and region proposal indicates how
+        # likely that class is to be the correct one for that region proposal.
+        scores: np.ndarray = net_output["cls_score"].data.cpu().numpy().squeeze()
         scores = scores.reshape([-1, scores.shape[-1]])  # In case there is 1 proposal
-        # get pose_deltas
-        pose_deltas = return_dict['pose_pred'].data.cpu().numpy()
-        # project poses on boxes
-        boxes_size = boxes[:, 2:4] - boxes[:, 0:2]
-        offset = np.concatenate((boxes[:, :2], np.zeros((boxes.shape[0], 3), dtype=np.float32)),
-                                axis=1)  # x,y top-left corner for each box
-        scale = np.concatenate((boxes_size[:, :2], np.ones((boxes.shape[0], 3), dtype=np.float32)),
-                               axis=1)  # width, height for each box
-        offset_poses = np.tile(np.concatenate([np.tile(offset[:, k:k + 1], (1, self.__njts)) for k in range(NT)], axis=1),
-                               (1, self.__anchor_poses.shape[0]))  # x,y top-left corner for each pose
-        scale_poses = np.tile(np.concatenate([np.tile(scale[:, k:k + 1], (1, self.__njts)) for k in range(NT)], axis=1),
-                              (1, self.__anchor_poses.shape[0]))
-        # x- y- scale for each pose
-        pred_poses = offset_poses + np.tile(self.__anchor_poses.reshape(1, -1),
-                                            (boxes.shape[0], 1)) * scale_poses  # put anchor poses into the boxes
-        pred_poses += scale_poses * pose_deltas[:,
-                                    self.__njts * NT:]  # apply regression (do not consider the one for the background class)
+
+        # Get the pose deltas (an array of size #boxes x ((K + 1) * #joints * NT) = #boxes x (21 * 13 * 5)).
+        pose_deltas: np.ndarray = net_output["pose_pred"].data.cpu().numpy()
+
+        # Make an array of size #boxes x 2, in which each row contains [width, height] for a box.
+        box_sizes: np.ndarray = boxes[:, 2:4] - boxes[:, :2]
+
+        # Make an array of size #boxes x NT, in which each row contains [left, top, 0, 0, 0] for a box.
+        offset: np.ndarray = np.concatenate(
+            (boxes[:, :2], np.zeros((boxes.shape[0], 3), dtype=np.float32)), axis=1
+        )
+
+        # Make an array of size #boxes x NT, in which each row contains [width, height, 1, 1, 1] for a box.
+        scale: np.ndarray = np.concatenate(
+            (box_sizes[:, :2], np.ones((boxes.shape[0], 3), dtype=np.float32)), axis=1
+        )
+
+        # Make an array of size #boxes x (#joints * K * NT) = #boxes x (13 * 20 * 5). Each row contains
+        # flatten(repeat([repeat(left, #joints), repeat(top, #joints), repeat(0, 3 * #joints)], K)).
+        offset_poses: np.ndarray = np.tile(
+            np.concatenate([np.tile(offset[:, i:i + 1], (1, self.__njts)) for i in range(self.__NT)], axis=1),
+            (1, self.__K)
+        )
+
+        # Make an array of size #boxes x (# joints * K * 5) = #boxes x (13 * 20 * 5). Each row contains
+        # flatten(repeat([repeat(width, #joints), repeat(height, #joints), repeat(1, 3 * #joints)], K)).
+        scale_poses: np.ndarray = np.tile(
+            np.concatenate([np.tile(scale[:, i:i + 1], (1, self.__njts)) for i in range(self.__NT)], axis=1),
+            (1, self.__K)
+        )
+
+        # Make versions of the anchor poses for each box.
+        pred_poses: np.ndarray = np.tile(
+            # 1) Reshape the K x (#joints * NT) = K x (13 * 5) array of anchor poses into a 1 x (K * 13 * 5) array.
+            self.__anchor_poses.reshape(1, -1),
+
+            # 2) Tile the 1 x (K * 13 * 5) array to make a #boxes x (K * 13 * 5) array.
+            (boxes.shape[0], 1)
+
+            # 3) Apply the scales and offsets.
+        ) * scale_poses + offset_poses
+
+        # Apply the pose deltas predicted by the network (scaling the 2D ones as needed in the process).
+        # Note that the pose deltas for the background class (0) aren't relevant here and are ignored.
+        pred_poses += scale_poses * pose_deltas[:, self.__njts * self.__NT:]
 
         # we save only the poses with score over th with at minimum 500 ones
         th = 0.1 / (scores.shape[1] - 1)
@@ -262,19 +301,15 @@ class SkeletonDetector:
             regscore[ii, 0] = scores[i, 1 + j]
             regprop[ii, 0] = i + 1
             regclass[ii, 0] = j + 1
-        return {
-            'regpose2d': regpose2d,
-            'regpose3d': regpose3d,
-            'regscore': regscore,
-            'regprop': regprop,
-            'regclass': regclass,
-            'rois': boxes,
-        }
 
-    def __load_pickle(self, specifier: str) -> Any:
-        filename: str = os.path.join(self.__model_dir, f"{self.__model_name}_{specifier}.pkl")
-        with open(filename, "rb") as f:
-            return pickle.load(f)
+        return {
+            "regpose2d": regpose2d,
+            "regpose3d": regpose3d,
+            "regscore": regscore,
+            "regprop": regprop,
+            "regclass": regclass,
+            "rois": boxes,
+        }
 
     # PRIVATE STATIC METHODS
 
@@ -413,7 +448,7 @@ class SkeletonDetector:
             torch.device('cpu')
 
         # load config and network
-        print('loading the model')
+        print('Loading LCR-Net model...')
         _merge_a_into_b(cfg_dict, cfg)
         cfg.MODEL.LOAD_IMAGENET_PRETRAINED_WEIGHTS = False
         cfg.CUDA = gpuid >= 0
