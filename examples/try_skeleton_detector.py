@@ -37,7 +37,7 @@ def main() -> None:
         SimpleCamera([0, 0, 0], [0, 0, 1], [0, -1, 0]), canonical_angular_speed=0.05, canonical_linear_speed=0.1
     )
 
-    skeleton_detector: SkeletonDetector = SkeletonDetector(model_name="DEMO_ECCV18")
+    skeleton_detector: SkeletonDetector = SkeletonDetector()
 
     # Construct the camera.
     with OpenNICamera(mirror_images=True) as camera:

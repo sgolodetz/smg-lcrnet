@@ -1,31 +1,58 @@
+# Standard Imports
+
 import io
+# noinspection PyPackageRequirements
 import matplotlib.pyplot as plt
 import nn as mynn
+# noinspection PyPackageRequirements
 import numpy as np
 import os
 import pickle
+# noinspection PyPackageRequirements
 import torch
+# noinspection PyPackageRequirements
 import torch.backends.cudnn as cudnn
 cudnn.benchmark = True
 
-import smg.external.lcrnet.scene as scene
+# Detectron.Pytorch Imports
 
-# FIXME: Make importing from Detectron.pytorch cleaner.
+# Note: These are imports from Detectron.pytorch. Somewhat frustratingly, I've had to add Detectron.pytorch/lib
+#       to the path to import them because Detectron.pytorch has a '.' in its name, which is why they're being
+#       imported like this. There might be a cleaner way, but it's unfortunately non-trivial without changing
+#       the internals of Detectron.pytorch itself.
 import utils.blob as blob_utils
 import utils.net as net_utils
 
+# LCR-Net Imports
+
+import smg.external.lcrnet.scene as scene
+
+# Standard Froms
+
 from collections import OrderedDict
 from timeit import default_timer as timer
+# noinspection PyPackageRequirements
 from torch.autograd import Variable
 from typing import Any, Dict, List, Tuple
 
-from smg.external.lcrnet.lcrnet_model import LCRNet
-from smg.external.lcrnet.lcr_net_ppi import LCRNet_PPI
-from smg.skeletons import Skeleton
+# Detectron.Pytorch Froms
 
-# FIXME: Make importing from Detectron.pytorch cleaner.
+# Note: These are also imports from Detectron.pytorch. In order to get things to work, I had to adapt some of the
+#       code from LCR-Net to my use case. That code unfortunately uses a protected function from Detectron.pytorch,
+#       as a result of which I'm having to import it here. I'm not a huge fan of that, but as Parmenides put it,
+#       "whatever is, is."
+# noinspection PyProtectedMember
 from core.config import assert_and_infer_cfg, cfg, _merge_a_into_b
 from utils.collections import AttrDict
+
+# LCR-Net Froms
+
+from smg.external.lcrnet.lcrnet_model import LCRNet
+from smg.external.lcrnet.lcr_net_ppi import LCRNet_PPI
+
+# smglib Froms
+
+from smg.skeletons import Skeleton
 
 
 class SkeletonDetector:
@@ -33,13 +60,28 @@ class SkeletonDetector:
 
     # CONSTRUCTOR
 
-    def __init__(self, *, model_name: str = "InTheWild-ResNet50"):
-        self.__gpuid: int = 0
+    def __init__(self, *, debug: bool = False, gpu_id: int = 0, model_name: str = "DEMO_ECCV18"):
+        """
+        Construct a 3D skeleton detector based on LCR-Net.
+
+        .. note::
+            The available models can be found at https://thoth.inrialpes.fr/src/LCR-Net.
+            DEMO_ECCV18 is the real-time one, so I've set that as the default.
+
+        :param debug:       Whether to output timings for debugging purposes.
+        :param gpu_id:      The GPU on which to run the detector.
+        :param model_name:  The name of the LCR-Net model to use.
+        """
+        self.__debug: bool = debug
+        self.__gpu_id: int = gpu_id
         self.__model_dir: str = os.path.join(os.path.dirname(__file__), "../external/lcrnet/models")
         self.__model_name: str = model_name
 
         # Specify the keypoint names.
         self.__keypoint_names: Dict[int, str] = {
+            # The keypoints actually detected by LCR-Net. Note that LCR-Net is not prescriptive about
+            # what they're called, so I've chosen to use the same names as used by OpenPose to make it
+            # easier to reuse code elsewhere (e.g. in the skeleton renderer).
             0: "RAnkle",
             1: "LAnkle",
             2: "RKnee",
@@ -54,7 +96,9 @@ class SkeletonDetector:
             11: "LShoulder",
             12: "Nose",
 
-            # Virtual keypoints added by smg-lcrnet (to ensure that bones always join keypoints)
+            # Virtual keypoints added by smg-lcrnet (to ensure that bones always join keypoints). LCR-Net slightly
+            # unhelpfully uses a skeleton that contains bones which join the midpoints of other bones. To handle
+            # that straightforwardly, I just add some additional keypoints at the midpoints of the relevant bones.
             13: "Neck",
             14: "MidHip"
         }
@@ -62,12 +106,13 @@ class SkeletonDetector:
         # Specify which keypoints are joined to form bones.
         self.__keypoint_pairs: List[Tuple[str, str]] = [
             (self.__keypoint_names[i], self.__keypoint_names[j]) for i, j in [
+                # The bones joining the keypoints detected by LCR-Net.
                 (0, 2), (1, 3), (2, 4), (3, 5), (4, 5), (6, 8), (7, 9), (8, 10), (9, 11), (10, 11),
+
+                # The bones joining the virtual keypoints added by smg-lcrnet.
                 (4, 14), (5, 14), (10, 13), (11, 13), (12, 13), (13, 14)
             ]
         ]
-
-        print(self.__keypoint_pairs)
 
         # Load the model and make the network.
         self.__anchor_poses: np.ndarray = self.__load_pickle("anchor_poses")
@@ -78,12 +123,14 @@ class SkeletonDetector:
         self.__K: int = self.__anchor_poses.shape[0]
         self.__njts: int = self.__anchor_poses.shape[1] // 5  # 5 = 2D + 3D
 
-        self.__net: LCRNet = SkeletonDetector.__make_model(self.__model, self.__cfg, self.__njts, self.__gpuid)
+        self.__net: LCRNet = SkeletonDetector.__make_model(self.__model, self.__cfg, self.__njts, self.__gpu_id)
 
-        # TODO: Comment here.
+        # Load some relevant matrices.
         self.__projmat: np.ndarray = np.load(
             os.path.join(os.path.dirname(__file__), "../external/lcrnet/standard_projmat.npy")
         )
+
+        self.__projmat_block_diag, self.__M = scene.get_matrices(self.__projmat, self.__njts)
 
     # PUBLIC METHODS
 
@@ -92,37 +139,38 @@ class SkeletonDetector:
         Detect 3D skeletons in an RGB image using LCR-Net.
 
         :param image:       The RGB image.
-        :param visualise:   Whether to make the output visualisation.
+        :param visualise:   Whether to make the output visualisation (can be a bit slow).
         :return:            A tuple consisting of the detected 3D skeletons and the output visualisation (if requested).
         """
+        # Run LCR-Net on the image to get the pose proposals.
         start = timer()
         res = SkeletonDetector.__detect_pose([image], self.__anchor_poses, self.__njts, self.__net)
         end = timer()
-        print(f"  Detection Time: {end - start}s")
-
-        projMat_block_diag, M = scene.get_matrices(self.__projmat, self.__njts)
+        if self.__debug:
+            print(f"  Detection Time: {end - start}s")
 
         i = 0
 
-        resolution = image.shape[:2]
-
-        # perform postprocessing
+        # Perform pose proposal integration (PPI).
         start = timer()
+        resolution = image.shape[:2]
         detections = LCRNet_PPI(res[i], self.__K, resolution, J=self.__njts, **self.__ppi_params)
         end = timer()
-        print(f"  Postprocessing Time: {end - start}s")
+        if self.__debug:
+            print(f"  PPI Time: {end - start}s")
 
-        # move 3d pose into scene coordinates
+        # Transform the 3D poses into scene coordinates.
         start = timer()
         for detection in detections:
-            delta3d = scene.compute_reproj_delta_3d(detection, projMat_block_diag, M, self.__njts)
+            delta3d = scene.compute_reproj_delta_3d(detection, self.__projmat_block_diag, self.__M, self.__njts)
             detection['pose3d'][:  self.__njts] += delta3d[0]
             detection['pose3d'][self.__njts:2 * self.__njts] += delta3d[1]
             detection['pose3d'][2 * self.__njts:3 * self.__njts] -= delta3d[2]
         end = timer()
-        print(f"  3D Scene Coordinate Regression Time: {end - start}s")
+        if self.__debug:
+            print(f"  Scene Coordinate Regression Time: {end - start}s")
 
-        # Make the skeletons.
+        # Make the actual skeletons.
         skeletons: List[Skeleton] = []
         for detection in detections:
             detected_keypoints: np.ndarray = detection["pose3d"].reshape(3, self.__njts).transpose()
