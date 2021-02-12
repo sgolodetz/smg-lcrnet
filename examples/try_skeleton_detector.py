@@ -1,14 +1,17 @@
+# noinspection PyPackageRequirements
 import cv2
+# noinspection PyPackageRequirements
 import numpy as np
 import os
 
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+# noinspection PyPackageRequirements
 import pygame
 
+# noinspection PyPackageRequirements
 from OpenGL.GL import *
-from pprint import pprint
 from timeit import default_timer as timer
-from typing import List, Tuple
+from typing import Tuple
 
 from smg.lcrnet import SkeletonDetector
 from smg.opengl import OpenGLMatrixContext, OpenGLUtil
@@ -37,6 +40,7 @@ def main() -> None:
         SimpleCamera([0, 0, 0], [0, 0, 1], [0, -1, 0]), canonical_angular_speed=0.05, canonical_linear_speed=0.1
     )
 
+    # Construct the skeleton detector.
     skeleton_detector: SkeletonDetector = SkeletonDetector()
 
     # Construct the camera.
