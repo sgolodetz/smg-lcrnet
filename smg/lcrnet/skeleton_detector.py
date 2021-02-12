@@ -21,12 +21,11 @@ from typing import Any, Dict, List, Tuple
 
 from smg.external.lcrnet.lcrnet_model import LCRNet
 from smg.external.lcrnet.lcr_net_ppi import LCRNet_PPI
+from smg.skeletons import Skeleton
 
 # FIXME: Make importing from Detectron.pytorch cleaner.
 from core.config import assert_and_infer_cfg, cfg, _merge_a_into_b
 from utils.collections import AttrDict
-
-from .skeleton import Skeleton
 
 
 class SkeletonDetector:
@@ -85,20 +84,6 @@ class SkeletonDetector:
         self.__projmat: np.ndarray = np.load(
             os.path.join(os.path.dirname(__file__), "../external/lcrnet/standard_projmat.npy")
         )
-
-    # PUBLIC STATIC METHODS
-
-    @staticmethod
-    def make_bone_key(keypoint1: Skeleton.Keypoint, keypoint2: Skeleton.Keypoint) -> Tuple[str, str]:
-        """
-        Make a key that can be used to look up a bone in a dictionary.
-
-        :param keypoint1:   The keypoint at one end of the bone.
-        :param keypoint2:   The keypoint at the other end of the bone.
-        :return:            The key for the bone.
-        """
-        # noinspection PyTypeChecker
-        return tuple(sorted([keypoint1.name, keypoint2.name]))
 
     # PUBLIC METHODS
 

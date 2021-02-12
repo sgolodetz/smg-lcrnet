@@ -10,12 +10,13 @@ from pprint import pprint
 from timeit import default_timer as timer
 from typing import List, Tuple
 
-from smg.lcrnet import Skeleton, SkeletonDetector, SkeletonRenderer
+from smg.lcrnet import SkeletonDetector
 from smg.opengl import OpenGLMatrixContext, OpenGLUtil
 from smg.openni import OpenNICamera
 from smg.rigging.cameras import SimpleCamera
 from smg.rigging.controllers import KeyboardCameraController
 from smg.rigging.helpers import CameraPoseConverter
+from smg.skeletons import SkeletonRenderer
 
 
 def main() -> None:
