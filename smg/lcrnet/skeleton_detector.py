@@ -238,15 +238,15 @@ class SkeletonDetector:
         with torch.no_grad():
             net_output: Dict[str, torch.Tensor] = self.__net(**inputs)
 
-        # Get the region proposals from the network output and scale them as necessary.
+        # Get the candidate boxes from the network output and scale them as necessary.
         rois: np.ndarray = net_output["rois"].data.cpu().numpy()
         boxes: np.ndarray = rois[:, 1:5] / image_scale
 
-        # Get the class scores for each region proposal (an array of size #boxes x (K + 1)). Each class corresponds
-        # to an anchor pose (or the background). The score for a particular class and region proposal indicates how
-        # likely that class is to be the correct one for that region proposal.
+        # Get the class scores for each candidate box (an array of size #boxes x (K + 1)). Each class corresponds
+        # to an anchor pose (or the background). The score for a particular class and candidate box indicates how
+        # likely that class is to be the correct one for that candidate box.
         scores: np.ndarray = net_output["cls_score"].data.cpu().numpy().squeeze()
-        scores = scores.reshape([-1, scores.shape[-1]])  # In case there is 1 proposal
+        scores = scores.reshape([-1, scores.shape[-1]])  # In case there is only one candidate box
 
         # Get the pose deltas (an array of size #boxes x ((K + 1) * #joints * NT) = #boxes x (21 * 13 * 5)).
         pose_deltas: np.ndarray = net_output["pose_pred"].data.cpu().numpy()
