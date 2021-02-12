@@ -201,6 +201,12 @@ class SkeletonDetector:
     # PRIVATE METHODS
 
     def __load_pickle(self, specifier: str) -> Any:
+        """
+        Load the specified LCR-Net model-related pickle file.
+
+        :param specifier:   A specifier indicating the pickle file to load.
+        :return:            The loaded contents of the pickle file.
+        """
         filename: str = os.path.join(self.__model_dir, f"{self.__model_name}_{specifier}.pkl")
         with open(filename, "rb") as f:
             return pickle.load(f)
@@ -283,21 +289,35 @@ class SkeletonDetector:
         # Note that the pose deltas for the background class (0) aren't relevant here and are ignored.
         pred_poses += scale_poses * pose_deltas[:, self.__njts * self.__NT:]
 
-        # we save only the poses with score over th with at minimum 500 ones
-        th = 0.1 / (scores.shape[1] - 1)
-        Nmin = min(500, scores[:, 1:].size - 1)
-        if np.sum(scores[:, 1:] > th) < Nmin:  # set thresholds to keep at least Nmin boxes
-            th = - np.sort(-scores[:, 1:].ravel())[Nmin - 1]
-        where = list(zip(*np.where(scores[:, 1:] >= th)))  # which one to save
-        nPP = len(where)  # number to save
-        regpose2d = np.empty((nPP, self.__njts * 2), dtype=np.float32)  # regressed 2D pose
-        regpose3d = np.empty((nPP, self.__njts * 3), dtype=np.float32)  # regressed 3D pose
-        regscore = np.empty((nPP, 1), dtype=np.float32)  # score of the regressed pose
-        regprop = np.empty((nPP, 1), dtype=np.float32)  # index of the proposal among the candidate boxes
-        regclass = np.empty((nPP, 1), dtype=np.float32)  # index of the anchor pose class
-        for ii, (i, j) in enumerate(where):
-            regpose2d[ii, :] = pred_poses[i, j * self.__njts * 5:j * self.__njts * 5 + self.__njts * 2]
-            regpose3d[ii, :] = pred_poses[i, j * self.__njts * 5 + self.__njts * 2:j * self.__njts * 5 + self.__njts * 5]
+        # Initialise a score threshold with a reasonable value. All proposals with at least the threshold score
+        # will be retained.
+        threshold: float = 0.1 / (scores.shape[1] - 1)
+
+        # Calculate a lower bound on the number of pose proposals to keep. If there are fewer than 500 pose proposals
+        # overall, the lower bound is simply the number of pose proposals available; otherwise, it's set to 500.
+        min_to_keep: int = min(500, scores[:, 1:].size - 1)
+
+        # If the threshold's been set too high, such that we won't be able to keep at least the minimum number of
+        # proposals, lower it to fix this.
+        if np.sum(scores[:, 1:] > threshold) < min_to_keep:
+            threshold = -np.sort(-scores[:, 1:].ravel())[min_to_keep - 1]
+
+        # Grab all proposals whose score is over the threshold. The 'which' list contains (box, class) tuples.
+        which: List[Tuple[int, int]] = list(zip(*np.where(scores[:, 1:] >= threshold)))
+        kept: int = len(which)
+        regpose2d: np.ndarray = np.empty((kept, self.__njts * 2), dtype=np.float32)  # regressed 2D pose
+        regpose3d: np.ndarray = np.empty((kept, self.__njts * 3), dtype=np.float32)  # regressed 3D pose
+        regscore: np.ndarray = np.empty((kept, 1), dtype=np.float32)  # score of the regressed pose
+        regprop: np.ndarray = np.empty((kept, 1), dtype=np.float32)  # index of the proposal among the candidate boxes
+        regclass: np.ndarray = np.empty((kept, 1), dtype=np.float32)  # index of the anchor pose class
+
+        for ii, (i, j) in enumerate(which):
+            regpose2d[ii, :] = pred_poses[
+                i, j * self.__njts * 5:j * self.__njts * 5 + self.__njts * 2
+            ]
+            regpose3d[ii, :] = pred_poses[
+                i, j * self.__njts * 5 + self.__njts * 2:j * self.__njts * 5 + self.__njts * 5
+            ]
             regscore[ii, 0] = scores[i, 1 + j]
             regprop[ii, 0] = i + 1
             regclass[ii, 0] = j + 1
