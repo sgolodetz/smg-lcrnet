@@ -144,17 +144,15 @@ class SkeletonDetector:
         """
         # Run LCR-Net on the image to get the pose proposals.
         start = timer()
-        res = self.__detect_pose(image)
+        res: Dict[str, Any] = self.__detect_pose(image)
         end = timer()
         if self.__debug:
             print(f"  Detection Time: {end - start}s")
 
-        i = 0
-
         # Perform pose proposal integration (PPI).
         start = timer()
         resolution = image.shape[:2]
-        detections = LCRNet_PPI(res[i], self.__K, resolution, J=self.__njts, **self.__ppi_params)
+        detections = LCRNet_PPI(res, self.__K, resolution, J=self.__njts, **self.__ppi_params)
         end = timer()
         if self.__debug:
             print(f"  PPI Time: {end - start}s")
@@ -201,7 +199,7 @@ class SkeletonDetector:
 
     # PRIVATE METHODS
 
-    def __detect_pose(self, image: np.ndarray):
+    def __detect_pose(self, image: np.ndarray) -> Dict[str, Any]:
         """
         detect poses in a list of image
         img_output_list: list of couple (path_to_image, path_to_outputfile)
@@ -213,8 +211,6 @@ class SkeletonDetector:
         """
         # Note: This is a modified version of detect_pose from the LCR-Net code.
         NT = 5  # 2D + 3D
-
-        output = []
 
         # prepare the blob
         inputs, im_scale = SkeletonDetector.__get_blobs(image, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE)  # prepare blobs
@@ -266,16 +262,14 @@ class SkeletonDetector:
             regscore[ii, 0] = scores[i, 1 + j]
             regprop[ii, 0] = i + 1
             regclass[ii, 0] = j + 1
-        tosave = {'regpose2d': regpose2d,
-                  'regpose3d': regpose3d,
-                  'regscore': regscore,
-                  'regprop': regprop,
-                  'regclass': regclass,
-                  'rois': boxes,
-                  }
-        output.append(tosave)
-
-        return output
+        return {
+            'regpose2d': regpose2d,
+            'regpose3d': regpose3d,
+            'regscore': regscore,
+            'regprop': regprop,
+            'regclass': regclass,
+            'rois': boxes,
+        }
 
     def __load_pickle(self, specifier: str) -> Any:
         filename: str = os.path.join(self.__model_dir, f"{self.__model_name}_{specifier}.pkl")
