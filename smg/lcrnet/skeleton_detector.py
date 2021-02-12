@@ -31,8 +31,6 @@ import smg.external.lcrnet.scene as scene
 
 from collections import OrderedDict
 from timeit import default_timer as timer
-# noinspection PyPackageRequirements
-from torch.autograd import Variable
 from typing import Any, Dict, List, Tuple
 
 # Detectron.Pytorch Froms
@@ -145,7 +143,7 @@ class SkeletonDetector:
         """
         # Use LCR-Net to make the pose proposals.
         start = timer()
-        res: Dict[str, Any] = self.__make_pose_proposals(image)
+        pose_proposals: Dict[str, Any] = self.__make_pose_proposals(image)
         end = timer()
         if self.__debug:
             print(f"  Detection Time: {end - start}s")
@@ -153,7 +151,7 @@ class SkeletonDetector:
         # Perform pose proposal integration (PPI).
         start = timer()
         resolution = image.shape[:2]
-        detections = LCRNet_PPI(res, self.__K, resolution, J=self.__njts, **self.__ppi_params)
+        detections = LCRNet_PPI(pose_proposals, self.__K, resolution, J=self.__njts, **self.__ppi_params)
         end = timer()
         if self.__debug:
             print(f"  PPI Time: {end - start}s")
@@ -213,13 +211,19 @@ class SkeletonDetector:
 
     def __make_pose_proposals(self, image: np.ndarray) -> Dict[str, Any]:
         """
-        detect poses in a list of image
-        img_output_list: list of couple (path_to_image, path_to_outputfile)
-        ckpt_fname: path to the model weights
-        cfg_dict: directory of configuration
-        anchor_poses: file containing the anchor_poses or directly the anchor poses
-        njts: number of joints in the model
-        gpuid: -1 for using cpu mode, otherwise device_id
+        Use LCR-Net to make a set of pose proposals for an RGB image.
+
+        .. note::
+            The result is a dictionary containing:
+
+            "regpose2d" -> an array of size #proposals x (#joints * 2) of 2D joint locations
+            "regpose3d" -> an array of size #proposals x (#joints * 3) of 3D joint locations
+            "regscore" -> an array of size #proposals x 1 of proposal scores
+            "regprop" -> an array of size #proposals x 1 of candidate box indices
+            "rois" -> an array of size #boxes x 4 of candidate boxes, each in the form (left, top, right, bottom)
+
+        :param image:   The RGB image.
+        :return:        The set of pose proposals.
         """
         # Note: This is a modified version of detect_pose from the LCR-Net code.
 
