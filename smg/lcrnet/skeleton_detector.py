@@ -141,28 +141,32 @@ class SkeletonDetector:
         :param visualise:   Whether to make the output visualisation (can be a bit slow).
         :return:            A tuple consisting of the detected 3D skeletons and the output visualisation (if requested).
         """
-        # Use LCR-Net to make the pose proposals.
+        # Use LCR-Net to generate a set of pose proposals for the image.
         start = timer()
-        pose_proposals: Dict[str, Any] = self.__make_pose_proposals(image)
+        pose_proposals: Dict[str, Any] = self.__generate_pose_proposals(image)
         end = timer()
         if self.__debug:
-            print(f"  Detection Time: {end - start}s")
+            print(f"  Proposal Generation Time: {end - start}s")
 
-        # Perform pose proposal integration (PPI).
+        # Integrate the pose proposals (note that PPI = "pose proposal integration").
         start = timer()
-        resolution = image.shape[:2]
-        detections = LCRNet_PPI(pose_proposals, self.__K, resolution, J=self.__njts, **self.__ppi_params)
+        resolution: Tuple[int, int] = image.shape[:2]
+        detections: List[Dict[str, Any]] = LCRNet_PPI(
+            pose_proposals, self.__K, resolution, J=self.__njts, **self.__ppi_params
+        )
         end = timer()
         if self.__debug:
-            print(f"  PPI Time: {end - start}s")
+            print(f"  Proposal Integration Time: {end - start}s")
 
         # Transform the 3D poses into scene coordinates.
         start = timer()
         for detection in detections:
-            delta3d = scene.compute_reproj_delta_3d(detection, self.__projmat_block_diag, self.__M, self.__njts)
-            detection['pose3d'][:  self.__njts] += delta3d[0]
-            detection['pose3d'][self.__njts:2 * self.__njts] += delta3d[1]
-            detection['pose3d'][2 * self.__njts:3 * self.__njts] -= delta3d[2]
+            delta3d: np.ndarray = scene.compute_reproj_delta_3d(
+                detection, self.__projmat_block_diag, self.__M, self.__njts
+            )
+            detection["pose3d"][:  self.__njts] += delta3d[0]
+            detection["pose3d"][self.__njts:2 * self.__njts] += delta3d[1]
+            detection["pose3d"][2 * self.__njts:3 * self.__njts] -= delta3d[2]
         end = timer()
         if self.__debug:
             print(f"  Scene Coordinate Regression Time: {end - start}s")
@@ -198,20 +202,9 @@ class SkeletonDetector:
 
     # PRIVATE METHODS
 
-    def __load_pickle(self, specifier: str) -> Any:
+    def __generate_pose_proposals(self, image: np.ndarray) -> Dict[str, Any]:
         """
-        Load the specified LCR-Net model-related pickle file.
-
-        :param specifier:   A specifier indicating the pickle file to load.
-        :return:            The loaded contents of the pickle file.
-        """
-        filename: str = os.path.join(self.__model_dir, f"{self.__model_name}_{specifier}.pkl")
-        with open(filename, "rb") as f:
-            return pickle.load(f)
-
-    def __make_pose_proposals(self, image: np.ndarray) -> Dict[str, Any]:
-        """
-        Use LCR-Net to make a set of pose proposals for an RGB image.
+        Use LCR-Net to generate a set of pose proposals for an RGB image.
 
         .. note::
             The result is a dictionary containing:
@@ -334,6 +327,17 @@ class SkeletonDetector:
             "regclass": regclass,
             "rois": boxes,
         }
+
+    def __load_pickle(self, specifier: str) -> Any:
+        """
+        Load the specified LCR-Net model-related pickle file.
+
+        :param specifier:   A specifier indicating the pickle file to load.
+        :return:            The loaded contents of the pickle file.
+        """
+        filename: str = os.path.join(self.__model_dir, f"{self.__model_name}_{specifier}.pkl")
+        with open(filename, "rb") as f:
+            return pickle.load(f)
 
     # PRIVATE STATIC METHODS
 
