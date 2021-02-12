@@ -144,7 +144,7 @@ class SkeletonDetector:
         """
         # Run LCR-Net on the image to get the pose proposals.
         start = timer()
-        res = SkeletonDetector.__detect_pose([image], self.__anchor_poses, self.__njts, self.__net)
+        res = self.__detect_pose(image)
         end = timer()
         if self.__debug:
             print(f"  Detection Time: {end - start}s")
@@ -201,15 +201,7 @@ class SkeletonDetector:
 
     # PRIVATE METHODS
 
-    def __load_pickle(self, specifier: str) -> Any:  # TODO: Check the right return type.
-        filename: str = os.path.join(self.__model_dir, f"{self.__model_name}_{specifier}.pkl")
-        with open(filename, "rb") as f:
-            return pickle.load(f)
-
-    # PRIVATE STATIC METHODS
-
-    @staticmethod
-    def __detect_pose(img_output_list, anchor_poses, njts, model: LCRNet):
+    def __detect_pose(self, image: np.ndarray):
         """
         detect poses in a list of image
         img_output_list: list of couple (path_to_image, path_to_outputfile)
@@ -219,79 +211,85 @@ class SkeletonDetector:
         njts: number of joints in the model
         gpuid: -1 for using cpu mode, otherwise device_id
         """
+        # Note: This is a modified version of detect_pose from the LCR-Net code.
         NT = 5  # 2D + 3D
 
         output = []
-        # iterate over image
-        for i, im in enumerate(img_output_list):
-            print(f"processing image {i}")
-            # prepare the blob
-            inputs, im_scale = SkeletonDetector.__get_blobs(im, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE)  # prepare blobs
 
-            # forward
-            if cfg.FPN.MULTILEVEL_ROIS and not cfg.MODEL.FASTER_RCNN:
-                _add_multilevel_rois_for_test(inputs, 'rois')  # Add multi-level rois for FPN
-            if cfg.PYTORCH_VERSION_LESS_THAN_040:  # forward
-                inputs['data'] = [Variable(torch.from_numpy(inputs['data']), volatile=True)]
-                inputs['im_info'] = [Variable(torch.from_numpy(inputs['im_info']), volatile=True)]
-                return_dict = model(**inputs)
-            else:
-                inputs['data'] = [torch.from_numpy(inputs['data'])]
-                inputs['im_info'] = [torch.from_numpy(inputs['im_info'])]
-                with torch.no_grad():
-                    return_dict = model(**inputs)
-            # get boxes
-            rois = return_dict['rois'].data.cpu().numpy()
-            boxes = rois[:, 1:5] / im_scale
-            # get scores
-            scores = return_dict['cls_score'].data.cpu().numpy().squeeze()
-            scores = scores.reshape([-1, scores.shape[-1]])  # In case there is 1 proposal
-            # get pose_deltas
-            pose_deltas = return_dict['pose_pred'].data.cpu().numpy()
-            # project poses on boxes
-            boxes_size = boxes[:, 2:4] - boxes[:, 0:2]
-            offset = np.concatenate((boxes[:, :2], np.zeros((boxes.shape[0], 3), dtype=np.float32)),
-                                    axis=1)  # x,y top-left corner for each box
-            scale = np.concatenate((boxes_size[:, :2], np.ones((boxes.shape[0], 3), dtype=np.float32)),
-                                   axis=1)  # width, height for each box
-            offset_poses = np.tile(np.concatenate([np.tile(offset[:, k:k + 1], (1, njts)) for k in range(NT)], axis=1),
-                                   (1, anchor_poses.shape[0]))  # x,y top-left corner for each pose
-            scale_poses = np.tile(np.concatenate([np.tile(scale[:, k:k + 1], (1, njts)) for k in range(NT)], axis=1),
-                                  (1, anchor_poses.shape[0]))
-            # x- y- scale for each pose
-            pred_poses = offset_poses + np.tile(anchor_poses.reshape(1, -1),
-                                                (boxes.shape[0], 1)) * scale_poses  # put anchor poses into the boxes
-            pred_poses += scale_poses * pose_deltas[:,
-                                        njts * NT:]  # apply regression (do not consider the one for the background class)
+        # prepare the blob
+        inputs, im_scale = SkeletonDetector.__get_blobs(image, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE)  # prepare blobs
 
-            # we save only the poses with score over th with at minimum 500 ones
-            th = 0.1 / (scores.shape[1] - 1)
-            Nmin = min(500, scores[:, 1:].size - 1)
-            if np.sum(scores[:, 1:] > th) < Nmin:  # set thresholds to keep at least Nmin boxes
-                th = - np.sort(-scores[:, 1:].ravel())[Nmin - 1]
-            where = list(zip(*np.where(scores[:, 1:] >= th)))  # which one to save
-            nPP = len(where)  # number to save
-            regpose2d = np.empty((nPP, njts * 2), dtype=np.float32)  # regressed 2D pose
-            regpose3d = np.empty((nPP, njts * 3), dtype=np.float32)  # regressed 3D pose
-            regscore = np.empty((nPP, 1), dtype=np.float32)  # score of the regressed pose
-            regprop = np.empty((nPP, 1), dtype=np.float32)  # index of the proposal among the candidate boxes
-            regclass = np.empty((nPP, 1), dtype=np.float32)  # index of the anchor pose class
-            for ii, (i, j) in enumerate(where):
-                regpose2d[ii, :] = pred_poses[i, j * njts * 5:j * njts * 5 + njts * 2]
-                regpose3d[ii, :] = pred_poses[i, j * njts * 5 + njts * 2:j * njts * 5 + njts * 5]
-                regscore[ii, 0] = scores[i, 1 + j]
-                regprop[ii, 0] = i + 1
-                regclass[ii, 0] = j + 1
-            tosave = {'regpose2d': regpose2d,
-                      'regpose3d': regpose3d,
-                      'regscore': regscore,
-                      'regprop': regprop,
-                      'regclass': regclass,
-                      'rois': boxes,
-                      }
-            output.append(tosave)
+        # forward
+        if cfg.FPN.MULTILEVEL_ROIS and not cfg.MODEL.FASTER_RCNN:
+            _add_multilevel_rois_for_test(inputs, 'rois')  # Add multi-level rois for FPN
+        if cfg.PYTORCH_VERSION_LESS_THAN_040:  # forward
+            inputs['data'] = [Variable(torch.from_numpy(inputs['data']), volatile=True)]
+            inputs['im_info'] = [Variable(torch.from_numpy(inputs['im_info']), volatile=True)]
+            return_dict = self.__net(**inputs)
+        else:
+            inputs['data'] = [torch.from_numpy(inputs['data'])]
+            inputs['im_info'] = [torch.from_numpy(inputs['im_info'])]
+            with torch.no_grad():
+                return_dict = self.__net(**inputs)
+        # get boxes
+        rois = return_dict['rois'].data.cpu().numpy()
+        boxes = rois[:, 1:5] / im_scale
+        # get scores
+        scores = return_dict['cls_score'].data.cpu().numpy().squeeze()
+        scores = scores.reshape([-1, scores.shape[-1]])  # In case there is 1 proposal
+        # get pose_deltas
+        pose_deltas = return_dict['pose_pred'].data.cpu().numpy()
+        # project poses on boxes
+        boxes_size = boxes[:, 2:4] - boxes[:, 0:2]
+        offset = np.concatenate((boxes[:, :2], np.zeros((boxes.shape[0], 3), dtype=np.float32)),
+                                axis=1)  # x,y top-left corner for each box
+        scale = np.concatenate((boxes_size[:, :2], np.ones((boxes.shape[0], 3), dtype=np.float32)),
+                               axis=1)  # width, height for each box
+        offset_poses = np.tile(np.concatenate([np.tile(offset[:, k:k + 1], (1, self.__njts)) for k in range(NT)], axis=1),
+                               (1, self.__anchor_poses.shape[0]))  # x,y top-left corner for each pose
+        scale_poses = np.tile(np.concatenate([np.tile(scale[:, k:k + 1], (1, self.__njts)) for k in range(NT)], axis=1),
+                              (1, self.__anchor_poses.shape[0]))
+        # x- y- scale for each pose
+        pred_poses = offset_poses + np.tile(self.__anchor_poses.reshape(1, -1),
+                                            (boxes.shape[0], 1)) * scale_poses  # put anchor poses into the boxes
+        pred_poses += scale_poses * pose_deltas[:,
+                                    self.__njts * NT:]  # apply regression (do not consider the one for the background class)
+
+        # we save only the poses with score over th with at minimum 500 ones
+        th = 0.1 / (scores.shape[1] - 1)
+        Nmin = min(500, scores[:, 1:].size - 1)
+        if np.sum(scores[:, 1:] > th) < Nmin:  # set thresholds to keep at least Nmin boxes
+            th = - np.sort(-scores[:, 1:].ravel())[Nmin - 1]
+        where = list(zip(*np.where(scores[:, 1:] >= th)))  # which one to save
+        nPP = len(where)  # number to save
+        regpose2d = np.empty((nPP, self.__njts * 2), dtype=np.float32)  # regressed 2D pose
+        regpose3d = np.empty((nPP, self.__njts * 3), dtype=np.float32)  # regressed 3D pose
+        regscore = np.empty((nPP, 1), dtype=np.float32)  # score of the regressed pose
+        regprop = np.empty((nPP, 1), dtype=np.float32)  # index of the proposal among the candidate boxes
+        regclass = np.empty((nPP, 1), dtype=np.float32)  # index of the anchor pose class
+        for ii, (i, j) in enumerate(where):
+            regpose2d[ii, :] = pred_poses[i, j * self.__njts * 5:j * self.__njts * 5 + self.__njts * 2]
+            regpose3d[ii, :] = pred_poses[i, j * self.__njts * 5 + self.__njts * 2:j * self.__njts * 5 + self.__njts * 5]
+            regscore[ii, 0] = scores[i, 1 + j]
+            regprop[ii, 0] = i + 1
+            regclass[ii, 0] = j + 1
+        tosave = {'regpose2d': regpose2d,
+                  'regpose3d': regpose3d,
+                  'regscore': regscore,
+                  'regprop': regprop,
+                  'regclass': regclass,
+                  'rois': boxes,
+                  }
+        output.append(tosave)
 
         return output
+
+    def __load_pickle(self, specifier: str) -> Any:
+        filename: str = os.path.join(self.__model_dir, f"{self.__model_name}_{specifier}.pkl")
+        with open(filename, "rb") as f:
+            return pickle.load(f)
+
+    # PRIVATE STATIC METHODS
 
     @staticmethod
     def __display_poses(image, detections, njts) -> np.ndarray:
