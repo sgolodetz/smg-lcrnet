@@ -220,17 +220,10 @@ class SkeletonDetector:
         inputs, im_scale = SkeletonDetector.__get_blobs(image, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE)  # prepare blobs
 
         # forward
-        if cfg.FPN.MULTILEVEL_ROIS and not cfg.MODEL.FASTER_RCNN:
-            _add_multilevel_rois_for_test(inputs, 'rois')  # Add multi-level rois for FPN
-        if cfg.PYTORCH_VERSION_LESS_THAN_040:  # forward
-            inputs['data'] = [Variable(torch.from_numpy(inputs['data']), volatile=True)]
-            inputs['im_info'] = [Variable(torch.from_numpy(inputs['im_info']), volatile=True)]
+        inputs['data'] = [torch.from_numpy(inputs['data'])]
+        inputs['im_info'] = [torch.from_numpy(inputs['im_info'])]
+        with torch.no_grad():
             return_dict = self.__net(**inputs)
-        else:
-            inputs['data'] = [torch.from_numpy(inputs['data'])]
-            inputs['im_info'] = [torch.from_numpy(inputs['im_info'])]
-            with torch.no_grad():
-                return_dict = self.__net(**inputs)
         # get boxes
         rois = return_dict['rois'].data.cpu().numpy()
         boxes = rois[:, 1:5] / im_scale
