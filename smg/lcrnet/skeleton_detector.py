@@ -20,6 +20,7 @@ cudnn.benchmark = True
 #       to the path to import them because Detectron.pytorch has a '.' in its name, which is why they're being
 #       imported like this. There might be a cleaner way, but it's unfortunately non-trivial without changing
 #       the internals of Detectron.pytorch itself.
+import core.config
 import utils.blob as blob_utils
 import utils.net as net_utils
 
@@ -40,7 +41,7 @@ from typing import Any, Dict, List, Tuple
 #       as a result of which I'm having to import it here. I'm not a huge fan of that, but as Parmenides put it,
 #       "whatever is, is."
 # noinspection PyProtectedMember
-from core.config import assert_and_infer_cfg, cfg, _merge_a_into_b
+from core.config import assert_and_infer_cfg, _merge_a_into_b
 from utils.collections import AttrDict
 
 # LCR-Net Froms
@@ -67,7 +68,7 @@ class SkeletonDetector:
             DEMO_ECCV18 is the real-time one, so I've set that as the default.
 
         :param debug:       Whether to output timings for debugging purposes.
-        :param gpu_id:      The GPU on which to run the detector.
+        :param gpu_id:      The GPU on which to run the detector (or -1 for the CPU).
         :param model_name:  The name of the LCR-Net model to use.
         """
         self.__debug: bool = debug
@@ -115,14 +116,14 @@ class SkeletonDetector:
         # Load the model and make the network.
         self.__anchor_poses: np.ndarray = self.__load_pickle("anchor_poses")
         self.__cfg: AttrDict = self.__load_pickle("cfg")
-        self.__model: OrderedDict = torch.load(os.path.join(self.__model_dir, f"{model_name}_model.pth.tgz"))
+        self.__checkpoint: OrderedDict = torch.load(os.path.join(self.__model_dir, f"{model_name}_model.pth.tgz"))
         self.__ppi_params: Dict[str, Any] = self.__load_pickle("ppi_params")
 
         self.__K: int = self.__anchor_poses.shape[0]  # The number of anchor poses (a.k.a. "classes")
         self.__NT: int = 5  # 2D + 3D
         self.__njts: int = self.__anchor_poses.shape[1] // self.__NT
 
-        self.__net: LCRNet = SkeletonDetector.__make_model(self.__model, self.__cfg, self.__njts, self.__gpu_id)
+        self.__net: LCRNet = SkeletonDetector.__make_net(self.__cfg, self.__checkpoint, self.__gpu_id, self.__njts)
 
         # Load some relevant matrices.
         self.__projmat: np.ndarray = np.load(
@@ -221,7 +222,9 @@ class SkeletonDetector:
         # Note: This is a modified version of detect_pose from the LCR-Net code.
 
         # Prepare the image to be passed to the LCR-Net network, scaling it as necessary.
-        inputs, image_scale = SkeletonDetector.__get_blobs(image, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE)
+        inputs, image_scale = SkeletonDetector.__get_blobs(
+            image, core.config.cfg.TEST.SCALE, core.config.cfg.TEST.MAX_SIZE
+        )
         # noinspection PyUnresolvedReferences
         inputs["data"] = [torch.from_numpy(inputs["data"])]
         # noinspection PyUnresolvedReferences
@@ -467,23 +470,45 @@ class SkeletonDetector:
         return blobs, im_scale
 
     @staticmethod
-    def __make_model(ckpt, cfg_dict, njts: int, gpuid: int) -> LCRNet:
-        # load the anchor poses and the network
-        if gpuid >= 0:
-            assert torch.cuda.is_available(), "You should launch the script on cpu if cuda is not available"
-            torch.device('cuda:0')
-        else:
-            torch.device('cpu')
+    def __make_net(cfg: AttrDict, checkpoint: OrderedDict, gpu_id: int, njts: int) -> LCRNet:
+        """
+        Make the LCR-Net network.
 
-        # load config and network
-        print('Loading LCR-Net model...')
-        _merge_a_into_b(cfg_dict, cfg)
-        cfg.MODEL.LOAD_IMAGENET_PRETRAINED_WEIGHTS = False
-        cfg.CUDA = gpuid >= 0
+        :param cfg:         The network configuration.
+        :param checkpoint:  The checkpoint to use (in practice, the weights and biases for the network).
+        :param gpu_id:      The GPU on which to run the detector (or -1 for the CPU).
+        :param njts:        The number of joints detected by LCR-Net.
+        :return:            The network.
+        """
+        # Note: This is a modified version of some code extracted from detect_pose in the LCR-Net code.
+        if gpu_id >= 0:
+            assert torch.cuda.is_available(), "Set gpu_id = -1 to use the CPU if CUDA is not available"
+            torch.device("cuda:0")
+        else:
+            torch.device("cpu")
+
+        # Merge the local network configuration into the global one, and update a few settings.
+        _merge_a_into_b(cfg, core.config.cfg)
+        core.config.cfg.MODEL.LOAD_IMAGENET_PRETRAINED_WEIGHTS = False
+        core.config.cfg.CUDA = gpu_id >= 0
+
+        # Finalise the global network configuration.
         assert_and_infer_cfg()
-        model = LCRNet(njts)
-        if cfg.CUDA: model.cuda()
-        net_utils.load_ckpt(model, ckpt)
-        model = mynn.DataParallel(model, cpu_keywords=['im_info', 'roidb'], minibatch=True, device_ids=[0])
-        model.eval()
-        return model
+
+        # Construct the network.
+        net: LCRNet = LCRNet(njts)
+
+        # If CUDA's to be used, enable it.
+        if core.config.cfg.CUDA:
+            net.cuda()
+
+        # Load the checkpoint (i.e. the network's weights and biases).
+        net_utils.load_ckpt(net, checkpoint)
+
+        # Parallelise the application of the network.
+        net = mynn.DataParallel(net, cpu_keywords=["im_info", "roidb"], minibatch=True, device_ids=[0])
+
+        # Put the network into evaluation mode.
+        net.eval()
+
+        return net

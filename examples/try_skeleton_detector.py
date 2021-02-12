@@ -29,7 +29,7 @@ def main() -> None:
     pygame.init()
     window_size: Tuple[int, int] = (640, 480)
     pygame.display.set_mode(window_size, pygame.DOUBLEBUF | pygame.OPENGL)
-    pygame.display.set_caption("3D Skeleton Detector")
+    pygame.display.set_caption("LCR-Net 3D Skeleton Detector")
 
     # Enable the z-buffer.
     glEnable(GL_DEPTH_TEST)
