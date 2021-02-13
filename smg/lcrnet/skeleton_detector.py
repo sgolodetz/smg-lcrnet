@@ -68,7 +68,7 @@ class SkeletonDetector:
             DEMO_ECCV18 is the real-time one, so I've set that as the default.
 
         :param debug:       Whether to output timings for debugging purposes.
-        :param gpu_id:      The GPU on which to run the detector (or -1 for the CPU).
+        :param gpu_id:      The GPU on which to run the network (or -1 for the CPU).
         :param model_name:  The name of the LCR-Net model to use.
         """
         self.__debug: bool = debug
@@ -222,13 +222,9 @@ class SkeletonDetector:
         # Note: This is a modified version of detect_pose from the LCR-Net code.
 
         # Prepare the image to be passed to the LCR-Net network, scaling it as necessary.
-        inputs, image_scale = SkeletonDetector.__get_blobs(
+        inputs, image_scale = SkeletonDetector.__make_inputs(
             image, core.config.cfg.TEST.SCALE, core.config.cfg.TEST.MAX_SIZE
         )
-        # noinspection PyUnresolvedReferences
-        inputs["data"] = [torch.from_numpy(inputs["data"])]
-        # noinspection PyUnresolvedReferences
-        inputs["im_info"] = [torch.from_numpy(inputs["im_info"])]
 
         # Run the LCR-Net network.
         with torch.no_grad():
@@ -463,11 +459,36 @@ class SkeletonDetector:
         return output_image
 
     @staticmethod
-    def __get_blobs(im, target_scale, target_max_size):
-        """Convert an image and RoIs within that image into network inputs."""
-        blobs = {}
-        blobs['data'], im_scale, blobs['im_info'] = blob_utils.get_image_blob(im, target_scale, target_max_size)
-        return blobs, im_scale
+    def __make_inputs(image: np.ndarray, desired_smaller_size: int, max_larger_size: int):
+        """
+        Convert an image into inputs suitable for the LCR-Net network.
+
+        .. note::
+            The image will be rescaled and converted to a PyTorch tensor. The "data" part of the result
+            will contain the rescaled image as a 1 x 3 x H' x W' tensor. The "im_info" part of the result
+            will contain [H', W', scaling_factor].
+
+        :param image:                   The image.
+        :param desired_smaller_size:    The desired size of the smaller dimension of the rescaled image.
+        :param max_larger_size:         The maximum size of the larger dimension of the rescaled image.
+        :return:                        A tuple consisting of the network inputs and the scaling factor applied
+                                        to the image.
+        """
+        # Note: This is adapted from _get_blobs in the LCR-Net code.
+
+        # Determine an appropriate scaling factor and rescale the image accordingly.
+        inputs: Dict[str, List[torch.Tensor]] = {}
+        inputs["data"], scaling_factor, inputs["im_info"] = blob_utils.get_image_blob(
+            image, desired_smaller_size, max_larger_size
+        )
+
+        # Convert the results into PyTorch tensors.
+        # noinspection PyUnresolvedReferences
+        inputs["data"] = [torch.from_numpy(inputs["data"])]
+        # noinspection PyUnresolvedReferences
+        inputs["im_info"] = [torch.from_numpy(inputs["im_info"])]
+
+        return inputs, scaling_factor
 
     @staticmethod
     def __make_net(cfg: AttrDict, checkpoint: OrderedDict, gpu_id: int, njts: int) -> LCRNet:
@@ -476,13 +497,13 @@ class SkeletonDetector:
 
         :param cfg:         The network configuration.
         :param checkpoint:  The checkpoint to use (in practice, the weights and biases for the network).
-        :param gpu_id:      The GPU on which to run the detector (or -1 for the CPU).
-        :param njts:        The number of joints detected by LCR-Net.
+        :param gpu_id:      The GPU on which to run the network (or -1 for the CPU).
+        :param njts:        The number of joints that LCR-Net detects.
         :return:            The network.
         """
         # Note: This is a modified version of some code extracted from detect_pose in the LCR-Net code.
         if gpu_id >= 0:
-            assert torch.cuda.is_available(), "Set gpu_id = -1 to use the CPU if CUDA is not available"
+            assert torch.cuda.is_available(), "Set gpu_id to -1 to use the CPU if CUDA is not available"
             torch.device("cuda:0")
         else:
             torch.device("cpu")
