@@ -221,14 +221,22 @@ class SkeletonDetector:
         """
         # Note: This is a modified version of detect_pose from the LCR-Net code.
 
-        # Prepare the image to be passed to the LCR-Net network, scaling it as necessary.
+        # ~~~
+        # Step 1: Prepare the image to be passed to the LCR-Net network, scaling it as necessary.
+        # ~~~
         inputs, image_scale = SkeletonDetector.__make_inputs(
             image, core.config.cfg.TEST.SCALE, core.config.cfg.TEST.MAX_SIZE
         )
 
-        # Run the LCR-Net network.
+        # ~~~
+        # Step 2: Run the LCR-Net network.
+        # ~~~
         with torch.no_grad():
             net_output: Dict[str, torch.Tensor] = self.__net(**inputs)
+
+        # ~~~
+        # Step 3: Project the anchor poses into the candidate boxes to get a set of (box, class) proposals.
+        # ~~~
 
         # Get the candidate boxes from the network output and scale them as necessary.
         rois: np.ndarray = net_output["rois"].data.cpu().numpy()
@@ -284,6 +292,10 @@ class SkeletonDetector:
         # Apply the pose deltas predicted by the network (scaling the 2D ones as needed in the process).
         # Note that the pose deltas for the background class (0) aren't relevant here and are ignored.
         pred_poses += scale_poses * pose_deltas[:, self.__njts * self.__NT:]
+
+        # ~~~
+        # Step 4: Choose which (box, class) proposals to keep, and return them.
+        # ~~~
 
         # Initialise a score threshold with a reasonable value. All proposals with at least the threshold score
         # will be retained.
