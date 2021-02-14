@@ -196,8 +196,9 @@ class SkeletonDetector:
             skeletons.append(Skeleton(skeleton_keypoints, self.__keypoint_pairs))
 
         # If requested, make the output visualisation. Otherwise, just use the input image.
-        output_image: np.ndarray = SkeletonDetector.__display_poses(image[:, :, [2, 1, 0]], detections, self.__njts) \
-            if visualise else image
+        output_image: np.ndarray = SkeletonDetector.__visualise_detections(
+            image[:, :, [2, 1, 0]], detections, self.__njts
+        ) if visualise else image
 
         return skeletons, output_image
 
@@ -353,14 +354,100 @@ class SkeletonDetector:
     # PRIVATE STATIC METHODS
 
     @staticmethod
-    def __display_poses(image, detections, njts) -> np.ndarray:
+    def __make_inputs(image: np.ndarray, desired_smaller_size: int, max_larger_size: int):
+        """
+        Convert an image into inputs suitable for the LCR-Net network.
+
+        .. note::
+            The image will be rescaled and converted to a PyTorch tensor. The "data" part of the result
+            will contain the rescaled image as a 1 x 3 x H' x W' tensor. The "im_info" part of the result
+            will contain [H', W', scaling_factor].
+
+        :param image:                   The image.
+        :param desired_smaller_size:    The desired size of the smaller dimension of the rescaled image.
+        :param max_larger_size:         The maximum size of the larger dimension of the rescaled image.
+        :return:                        A tuple consisting of the network inputs and the scaling factor applied
+                                        to the image.
+        """
+        # Note: This is adapted from _get_blobs in the LCR-Net code.
+
+        # Determine an appropriate scaling factor and rescale the image accordingly.
+        inputs: Dict[str, List[torch.Tensor]] = {}
+        inputs["data"], scaling_factor, inputs["im_info"] = blob_utils.get_image_blob(
+            image, desired_smaller_size, max_larger_size
+        )
+
+        # Convert the results into PyTorch tensors.
+        # noinspection PyUnresolvedReferences
+        inputs["data"] = [torch.from_numpy(inputs["data"])]
+        # noinspection PyUnresolvedReferences
+        inputs["im_info"] = [torch.from_numpy(inputs["im_info"])]
+
+        return inputs, scaling_factor
+
+    @staticmethod
+    def __make_net(cfg: AttrDict, checkpoint: OrderedDict, gpu_id: int, njts: int) -> LCRNet:
+        """
+        Make the LCR-Net network.
+
+        :param cfg:         The network configuration.
+        :param checkpoint:  The checkpoint to use (in practice, the weights and biases for the network).
+        :param gpu_id:      The GPU on which to run the network (or -1 for the CPU).
+        :param njts:        The number of joints that LCR-Net detects.
+        :return:            The network.
+        """
+        # Note: This is a modified version of some code extracted from detect_pose in the LCR-Net code.
+        if gpu_id >= 0:
+            assert torch.cuda.is_available(), "Set gpu_id to -1 to use the CPU if CUDA is not available"
+            torch.device("cuda:0")
+        else:
+            torch.device("cpu")
+
+        # Merge the local network configuration into the global one, and update a few settings.
+        _merge_a_into_b(cfg, core.config.cfg)
+        core.config.cfg.MODEL.LOAD_IMAGENET_PRETRAINED_WEIGHTS = False
+        core.config.cfg.CUDA = gpu_id >= 0
+
+        # Finalise the global network configuration.
+        assert_and_infer_cfg()
+
+        # Construct the network.
+        net: LCRNet = LCRNet(njts)
+
+        # If CUDA's to be used, enable it.
+        if core.config.cfg.CUDA:
+            net.cuda()
+
+        # Load the checkpoint (i.e. the network's weights and biases).
+        net_utils.load_ckpt(net, checkpoint)
+
+        # Parallelise the application of the network.
+        net = mynn.DataParallel(net, cpu_keywords=["im_info", "roidb"], minibatch=True, device_ids=[0])
+
+        # Put the network into evaluation mode.
+        net.eval()
+
+        return net
+
+    @staticmethod
+    def __visualise_detections(image: np.ndarray, detections: List[Dict[str, Any]], njts: int) -> np.ndarray:
+        """
+        Make a visualisation showing the people detected in the image.
+
+        :param image:       The image.
+        :param detections:  The detections of the people in the image.
+        :param njts:        The number of joints that LCR-Net detects.
+        :return:            A visualisation showing the people detected in the image.
+        """
+        # Note: This is a slightly modified version of display_poses from the LCR-Net code. I haven't tidied up
+        #       the code much because there's no real need, and it's not a good use of time.
         if njts == 13:
             left = [(9, 11), (7, 9), (1, 3), (3, 5)]  # bones on the left
             right = [(0, 2), (2, 4), (8, 10), (6, 8)]  # bones on the right
             right += [(4, 5), (10, 11)]  # bones on the torso
             # (manually add bone between middle of 4,5 to middle of 10,11, and middle of 10,11 and 12)
             head = 12
-        elif njts == 17:
+        else:  # njts == 17
             left = [(9, 11), (7, 9), (1, 3), (3, 5)]  # bones on the left
             right = [(0, 2), (2, 4), (8, 10), (6, 8)]  # bones on the right and the center
             right += [(4, 13), (5, 13), (13, 14), (14, 15), (15, 16), (12, 16), (10, 15),
@@ -469,79 +556,3 @@ class SkeletonDetector:
         plt.close(fig)
 
         return output_image
-
-    @staticmethod
-    def __make_inputs(image: np.ndarray, desired_smaller_size: int, max_larger_size: int):
-        """
-        Convert an image into inputs suitable for the LCR-Net network.
-
-        .. note::
-            The image will be rescaled and converted to a PyTorch tensor. The "data" part of the result
-            will contain the rescaled image as a 1 x 3 x H' x W' tensor. The "im_info" part of the result
-            will contain [H', W', scaling_factor].
-
-        :param image:                   The image.
-        :param desired_smaller_size:    The desired size of the smaller dimension of the rescaled image.
-        :param max_larger_size:         The maximum size of the larger dimension of the rescaled image.
-        :return:                        A tuple consisting of the network inputs and the scaling factor applied
-                                        to the image.
-        """
-        # Note: This is adapted from _get_blobs in the LCR-Net code.
-
-        # Determine an appropriate scaling factor and rescale the image accordingly.
-        inputs: Dict[str, List[torch.Tensor]] = {}
-        inputs["data"], scaling_factor, inputs["im_info"] = blob_utils.get_image_blob(
-            image, desired_smaller_size, max_larger_size
-        )
-
-        # Convert the results into PyTorch tensors.
-        # noinspection PyUnresolvedReferences
-        inputs["data"] = [torch.from_numpy(inputs["data"])]
-        # noinspection PyUnresolvedReferences
-        inputs["im_info"] = [torch.from_numpy(inputs["im_info"])]
-
-        return inputs, scaling_factor
-
-    @staticmethod
-    def __make_net(cfg: AttrDict, checkpoint: OrderedDict, gpu_id: int, njts: int) -> LCRNet:
-        """
-        Make the LCR-Net network.
-
-        :param cfg:         The network configuration.
-        :param checkpoint:  The checkpoint to use (in practice, the weights and biases for the network).
-        :param gpu_id:      The GPU on which to run the network (or -1 for the CPU).
-        :param njts:        The number of joints that LCR-Net detects.
-        :return:            The network.
-        """
-        # Note: This is a modified version of some code extracted from detect_pose in the LCR-Net code.
-        if gpu_id >= 0:
-            assert torch.cuda.is_available(), "Set gpu_id to -1 to use the CPU if CUDA is not available"
-            torch.device("cuda:0")
-        else:
-            torch.device("cpu")
-
-        # Merge the local network configuration into the global one, and update a few settings.
-        _merge_a_into_b(cfg, core.config.cfg)
-        core.config.cfg.MODEL.LOAD_IMAGENET_PRETRAINED_WEIGHTS = False
-        core.config.cfg.CUDA = gpu_id >= 0
-
-        # Finalise the global network configuration.
-        assert_and_infer_cfg()
-
-        # Construct the network.
-        net: LCRNet = LCRNet(njts)
-
-        # If CUDA's to be used, enable it.
-        if core.config.cfg.CUDA:
-            net.cuda()
-
-        # Load the checkpoint (i.e. the network's weights and biases).
-        net_utils.load_ckpt(net, checkpoint)
-
-        # Parallelise the application of the network.
-        net = mynn.DataParallel(net, cpu_keywords=["im_info", "roidb"], minibatch=True, device_ids=[0])
-
-        # Put the network into evaluation mode.
-        net.eval()
-
-        return net
