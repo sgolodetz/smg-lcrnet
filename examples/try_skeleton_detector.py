@@ -55,20 +55,21 @@ def main() -> None:
                     pygame.quit()
                     cv2.destroyAllWindows()
 
-                    # Forcibly terminate the whole process. This isn't graceful, but ORB-SLAM can sometimes
-                    # take a long time to shut down, and it's dull to wait for it.
-                    # TODO: Update this comment.
+                    # Forcibly terminate the whole process.
                     # noinspection PyProtectedMember
                     os._exit(0)
 
-            colour_image, depth_image = camera.get_images()
+            # Get a colour image from the camera.
+            colour_image, _ = camera.get_images()
 
+            # Detect any 3D skeletons in the image.
             start = timer()
-            skeletons, output_image = skeleton_detector.detect_skeletons(colour_image, visualise=False)
+            skeletons, visualisation = skeleton_detector.detect_skeletons(colour_image, visualise=False)
             end = timer()
-            print(f"Total Time: {end - start}s")
+            print(f"Skeleton Detection Time: {end - start}s")
 
-            cv2.imshow("Output Image", output_image)
+            # Show any visualisation produced during the detection process.
+            cv2.imshow("Output Visualisation", visualisation)
             cv2.waitKey(1)
 
             # Allow the user to control the camera.

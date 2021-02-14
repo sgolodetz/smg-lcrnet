@@ -196,11 +196,11 @@ class SkeletonDetector:
             skeletons.append(Skeleton(skeleton_keypoints, self.__keypoint_pairs))
 
         # If requested, make the output visualisation. Otherwise, just use the input image.
-        output_image: np.ndarray = SkeletonDetector.__visualise_detections(
+        visualisation: np.ndarray = SkeletonDetector.__visualise_detections(
             image[:, :, [2, 1, 0]], detections, self.__njts
         ) if visualise else image
 
-        return skeletons, output_image
+        return skeletons, visualisation
 
     # PRIVATE METHODS
 
