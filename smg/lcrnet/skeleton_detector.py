@@ -52,6 +52,7 @@ from smg.external.lcrnet.lcr_net_ppi import LCRNet_PPI
 # smglib Froms
 
 from smg.skeletons import Skeleton
+from smg.utility import GeometryUtil
 
 
 class SkeletonDetector:
@@ -134,13 +135,16 @@ class SkeletonDetector:
 
     # PUBLIC METHODS
 
-    def detect_skeletons(self, image: np.ndarray, *, visualise: bool = False) -> Tuple[List[Skeleton], np.ndarray]:
+    def detect_skeletons(self, image: np.ndarray, world_from_camera: np.ndarray, *,
+                         visualise: bool = False) -> Tuple[List[Skeleton], np.ndarray]:
         """
         Detect 3D skeletons in an RGB image using LCR-Net.
 
-        :param image:       The RGB image.
-        :param visualise:   Whether to make the output visualisation (can be a bit slow).
-        :return:            A tuple consisting of the detected 3D skeletons and the output visualisation (if requested).
+        :param image:               The RGB image.
+        :param world_from_camera:   The camera pose.
+        :param visualise:           Whether to make the output visualisation (can be a bit slow).
+        :return:                    A tuple consisting of the detected 3D skeletons and the output visualisation
+                                    (if requested).
         """
         # Use LCR-Net to generate a set of pose proposals for the image.
         start = timer()
@@ -183,6 +187,7 @@ class SkeletonDetector:
                 position: np.ndarray = detected_keypoints[i, :]
                 position[0] *= -1
                 position[1] *= -1
+                position = GeometryUtil.apply_rigid_transform(world_from_camera, position)
                 skeleton_keypoints[name] = Skeleton.Keypoint(name, position)
 
             skeleton_keypoints["MidHip"] = Skeleton.Keypoint(

@@ -81,11 +81,13 @@ def main() -> None:
                 # Get the newest frame from the server.
                 server.peek_newest_frame(client_id, receiver)
                 colour_image: np.ndarray = receiver.get_rgb_image()
-                tracker_w_t_c: np.ndarray = receiver.get_pose()  # TODO: Use this.
+                tracker_w_t_c: np.ndarray = receiver.get_pose()
 
                 # Use LCR-Net to detect 3D skeletons in the colour image.
                 start = timer()
-                skeletons_3d, visualisation = skeleton_detector.detect_skeletons(colour_image, visualise=False)
+                skeletons_3d, visualisation = skeleton_detector.detect_skeletons(
+                    colour_image, tracker_w_t_c, visualise=False
+                )
                 end = timer()
                 print(f"Skeleton Detection Time: {end - start}s")
 
