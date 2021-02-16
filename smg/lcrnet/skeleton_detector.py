@@ -133,6 +133,8 @@ class SkeletonDetector:
 
         self.__projmat_block_diag, self.__M = scene.get_matrices(self.__projmat, self.__njts)
 
+        # TODO: Run a dummy image through the network to warm it up.
+
     # PUBLIC METHODS
 
     def detect_skeletons(self, image: np.ndarray, world_from_camera: np.ndarray, *,
