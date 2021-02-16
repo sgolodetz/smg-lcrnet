@@ -10,14 +10,10 @@ from smg.skeletons import Skeleton
 
 def frame_processor(skeleton_detector: SkeletonDetector):
     def inner(colour_image: np.ndarray, _, world_from_camera: np.ndarray) -> List[Skeleton]:
-        cv2.imshow("Colour Image", colour_image)
-        cv2.waitKey()
-        cv2.destroyAllWindows()
+        # cv2.imshow("Colour Image", colour_image)
+        # cv2.waitKey()
+        # cv2.destroyAllWindows()
         skeletons, _ = skeleton_detector.detect_skeletons(colour_image, world_from_camera)
-        s: str = repr(skeletons)
-        print(s)
-        sks: List[Skeleton] = eval(s, {'Skeleton': Skeleton, 'Keypoint': Skeleton.Keypoint, 'array': np.array})
-        print(sks)
         return skeletons
     return inner
 
