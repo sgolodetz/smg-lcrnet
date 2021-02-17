@@ -72,7 +72,7 @@ class SkeletonDetector:
         :param gpu_id:      The GPU on which to run the network (or -1 for the CPU).
         :param model_name:  The name of the LCR-Net model to use.
         """
-        self.__debug: bool = debug
+        self.__debug: bool = False
         self.__gpu_id: int = gpu_id
         self.__model_dir: str = os.path.join(os.path.dirname(__file__), "../external/lcrnet/models")
         self.__model_name: str = model_name
@@ -133,7 +133,12 @@ class SkeletonDetector:
 
         self.__projmat_block_diag, self.__M = scene.get_matrices(self.__projmat, self.__njts)
 
-        # TODO: Run a dummy image through the network to warm it up.
+        # Run a detection on a dummy image to warm the network up.
+        dummy_image: np.ndarray = np.zeros((480, 640, 3), dtype=np.uint8)
+        self.detect_skeletons(dummy_image, np.eye(4))
+
+        # Enable debugging if requested.
+        self.__debug = debug
 
     # PUBLIC METHODS
 
