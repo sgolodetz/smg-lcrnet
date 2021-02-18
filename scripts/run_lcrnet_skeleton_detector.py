@@ -64,7 +64,7 @@ def main() -> None:
 
             # Detect any 3D skeletons in the image.
             start = timer()
-            skeletons, visualisation = skeleton_detector.detect_skeletons(colour_image, visualise=False)
+            skeletons, visualisation = skeleton_detector.detect_skeletons(colour_image, np.eye(4), visualise=False)
             end = timer()
             print(f"Skeleton Detection Time: {end - start}s")
 
