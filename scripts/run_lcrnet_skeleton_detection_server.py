@@ -122,7 +122,9 @@ def main() -> None:
 
                         # Render the 3D skeletons.
                         for skeleton_3d in skeletons_3d:
-                            SkeletonRenderer.render_skeleton(skeleton_3d)
+                            # SkeletonRenderer.render_skeleton(skeleton_3d)
+                            glColor3f(0, 0, 0)
+                            SkeletonRenderer.render_bounding_shapes(skeleton_3d)
 
             # Swap the front and back buffers.
             pygame.display.flip()
@@ -142,7 +144,8 @@ def main() -> None:
                     person_mask = SkeletonUtil.make_person_mask(skeletons_3d[0], depth_image, ws_points)
                     mask = np.where((mask[:, :, 0] == 0) & (person_mask != 0), 255, 0).astype(np.uint8)
 
-                cv2.imshow("Mask", (colour_image * 0.5 + np.atleast_3d(mask) * 0.5).astype(np.uint8))
+                depth_image_uc: np.ndarray = np.clip(depth_image * 255 / 5, 0, 255).astype(np.uint8)
+                cv2.imshow("Mask", (np.atleast_3d(depth_image_uc) * 0.5 + np.atleast_3d(mask) * 0.5).astype(np.uint8))
                 cv2.waitKey(1)
 
 
