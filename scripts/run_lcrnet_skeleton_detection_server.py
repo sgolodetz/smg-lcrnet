@@ -130,11 +130,11 @@ def main() -> None:
             pygame.display.flip()
 
             if image_size is not None:
-                start = timer()
+                # start = timer()
                 buffer = glReadPixels(0, 0, *window_size, GL_BGR, GL_UNSIGNED_BYTE)
                 mask = np.frombuffer(buffer, dtype=np.uint8).reshape((480, 640, 3))[::-1, :]
-                end = timer()
-                print(f"Read Time: {end - start}s")
+                # end = timer()
+                # print(f"Read Time: {end - start}s")
 
                 if len(skeletons_3d) == 1:
                     ws_points: np.ndarray = GeometryUtil.compute_world_points_image_fast(

@@ -94,6 +94,10 @@ def main() -> None:
                     # Render the 3D skeletons.
                     for skeleton in skeletons:
                         SkeletonRenderer.render_skeleton(skeleton)
+                        glColor3f(0, 0, 0)
+                        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+                        SkeletonRenderer.render_bounding_shapes(skeleton)
+                        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 
             # Swap the front and back buffers.
             pygame.display.flip()
