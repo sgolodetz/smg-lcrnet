@@ -106,8 +106,8 @@ class SkeletonDetector:
         # Specify which keypoints are joined to form bones.
         self.__keypoint_pairs: List[Tuple[str, str]] = [
             (self.__keypoint_names[i], self.__keypoint_names[j]) for i, j in [
-                # The bones joining the keypoints detected by LCR-Net.
-                (0, 2), (1, 3), (2, 4), (3, 5), (4, 5), (6, 8), (7, 9), (8, 10), (9, 11), (10, 11),
+                # The bones joining the keypoints detected by LCR-Net (excluding LHip-RHip and LShoulder-RShoulder).
+                (0, 2), (1, 3), (2, 4), (3, 5), (6, 8), (7, 9), (8, 10), (9, 11),
 
                 # The bones joining the virtual keypoints added by smg-lcrnet.
                 (4, 14), (5, 14), (10, 13), (11, 13), (12, 13), (13, 14)
