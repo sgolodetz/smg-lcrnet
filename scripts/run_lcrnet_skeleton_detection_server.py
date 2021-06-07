@@ -118,8 +118,9 @@ def main() -> None:
                         OpenGLUtil.render_voxel_grid([-2, -2, -2], [2, 0, 2], [1, 1, 1], dotted=True)
 
                         # Render the 3D skeletons.
-                        for skeleton_3d in skeletons_3d:
-                            SkeletonRenderer.render_skeleton(skeleton_3d)
+                        with SkeletonRenderer.default_lighting_context():
+                            for skeleton_3d in skeletons_3d:
+                                SkeletonRenderer.render_skeleton(skeleton_3d)
 
             # Swap the front and back buffers.
             pygame.display.flip()
