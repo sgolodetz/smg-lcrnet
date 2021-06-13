@@ -51,7 +51,7 @@ from smg.external.lcrnet.lcr_net_ppi import LCRNet_PPI
 
 # smglib Froms
 
-from smg.skeletons import Skeleton
+from smg.skeletons import Skeleton3D
 from smg.utility import GeometryUtil
 
 
@@ -143,7 +143,7 @@ class SkeletonDetector:
     # PUBLIC METHODS
 
     def detect_skeletons(self, image: np.ndarray, world_from_camera: np.ndarray, *,
-                         visualise: bool = False) -> Tuple[List[Skeleton], np.ndarray]:
+                         visualise: bool = False) -> Tuple[List[Skeleton3D], np.ndarray]:
         """
         Detect 3D skeletons in an RGB image using LCR-Net.
 
@@ -184,10 +184,10 @@ class SkeletonDetector:
             print(f"  Scene Coordinate Regression Time: {end - start}s")
 
         # Make the actual skeletons.
-        skeletons: List[Skeleton] = []
+        skeletons: List[Skeleton3D] = []
         for detection in detections:
             detected_keypoints: np.ndarray = detection["pose3d"].reshape(3, self.__njts).transpose()
-            skeleton_keypoints: Dict[str, Skeleton.Keypoint] = {}
+            skeleton_keypoints: Dict[str, Skeleton3D.Keypoint] = {}
 
             for i in range(detected_keypoints.shape[0]):
                 name: str = self.__keypoint_names[i]
@@ -195,17 +195,17 @@ class SkeletonDetector:
                 position[0] *= -1
                 position[1] *= -1
                 position = GeometryUtil.apply_rigid_transform(world_from_camera, position)
-                skeleton_keypoints[name] = Skeleton.Keypoint(name, position)
+                skeleton_keypoints[name] = Skeleton3D.Keypoint(name, position)
 
-            skeleton_keypoints["MidHip"] = Skeleton.Keypoint(
+            skeleton_keypoints["MidHip"] = Skeleton3D.Keypoint(
                 "MidHip", (skeleton_keypoints["LHip"].position + skeleton_keypoints["RHip"].position) / 2
             )
 
-            skeleton_keypoints["Neck"] = Skeleton.Keypoint(
+            skeleton_keypoints["Neck"] = Skeleton3D.Keypoint(
                 "Neck", (skeleton_keypoints["LShoulder"].position + skeleton_keypoints["RShoulder"].position) / 2
             )
 
-            skeletons.append(Skeleton(skeleton_keypoints, self.__keypoint_pairs))
+            skeletons.append(Skeleton3D(skeleton_keypoints, self.__keypoint_pairs))
 
         # If requested, make the output visualisation. Otherwise, just use the input image.
         visualisation: np.ndarray = SkeletonDetector.__visualise_detections(

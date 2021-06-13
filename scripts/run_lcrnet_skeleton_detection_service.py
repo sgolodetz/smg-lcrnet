@@ -12,11 +12,11 @@ from typing import Callable, List, Tuple
 
 from smg.comms.skeletons import SkeletonDetectionService
 from smg.lcrnet import SkeletonDetector
-from smg.skeletons import Skeleton
+from smg.skeletons import Skeleton3D
 
 
 def make_frame_processor(skeleton_detector: SkeletonDetector, *, debug: bool = False) -> \
-        Callable[[np.ndarray, np.ndarray, np.ndarray], List[Skeleton]]:
+        Callable[[np.ndarray, np.ndarray, np.ndarray], List[Skeleton3D]]:
     """
     Make a frame processor for a skeleton detection service that forwards to an LCR-Net skeleton detector.
 
@@ -26,7 +26,7 @@ def make_frame_processor(skeleton_detector: SkeletonDetector, *, debug: bool = F
     """
     # noinspection PyUnusedLocal
     def detect_skeletons(colour_image: np.ndarray, depth_image: np.ndarray,
-                         world_from_camera: np.ndarray) -> List[Skeleton]:
+                         world_from_camera: np.ndarray) -> List[Skeleton3D]:
         """
         Detect 3D skeletons in an RGB image using LCR-Net.
 
