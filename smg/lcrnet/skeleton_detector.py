@@ -51,7 +51,7 @@ from smg.external.lcrnet.lcr_net_ppi import LCRNet_PPI
 
 # smglib Froms
 
-from smg.skeletons import Skeleton3D
+from smg.skeletons import Keypoint, Skeleton3D
 from smg.utility import GeometryUtil
 
 
@@ -187,7 +187,7 @@ class SkeletonDetector:
         skeletons: List[Skeleton3D] = []
         for detection in detections:
             detected_keypoints: np.ndarray = detection["pose3d"].reshape(3, self.__njts).transpose()
-            skeleton_keypoints: Dict[str, Skeleton3D.Keypoint] = {}
+            skeleton_keypoints: Dict[str, Keypoint] = {}
 
             for i in range(detected_keypoints.shape[0]):
                 name: str = self.__keypoint_names[i]
@@ -195,13 +195,13 @@ class SkeletonDetector:
                 position[0] *= -1
                 position[1] *= -1
                 position = GeometryUtil.apply_rigid_transform(world_from_camera, position)
-                skeleton_keypoints[name] = Skeleton3D.Keypoint(name, position)
+                skeleton_keypoints[name] = Keypoint(name, position)
 
-            skeleton_keypoints["MidHip"] = Skeleton3D.Keypoint(
+            skeleton_keypoints["MidHip"] = Keypoint(
                 "MidHip", (skeleton_keypoints["LHip"].position + skeleton_keypoints["RHip"].position) / 2
             )
 
-            skeleton_keypoints["Neck"] = Skeleton3D.Keypoint(
+            skeleton_keypoints["Neck"] = Keypoint(
                 "Neck", (skeleton_keypoints["LShoulder"].position + skeleton_keypoints["RShoulder"].position) / 2
             )
 
