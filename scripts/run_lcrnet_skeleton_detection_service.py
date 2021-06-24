@@ -38,7 +38,12 @@ def make_frame_processor(skeleton_detector: SkeletonDetector, *, debug: bool = F
         if debug:
             start = timer()
 
+        # Detect the skeletons.
         skeletons, _ = skeleton_detector.detect_skeletons(colour_image, world_from_camera)
+
+        # Remove the keypoint poses so that they will be recomputed by the client (this is necessary if we want to
+        # visualise the keypoint orienters, since those can't be easily sent over the network).
+        skeletons = [s.make_bare() for s in skeletons]
 
         if debug:
             end = timer()
