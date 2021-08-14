@@ -1,5 +1,7 @@
 # Standard Imports
 
+# noinspection PyPackageRequirements
+import cv2
 import io
 # noinspection PyPackageRequirements
 import matplotlib.pyplot as plt
@@ -153,6 +155,12 @@ class SkeletonDetector:
         :return:                    A tuple consisting of the detected 3D skeletons and the output visualisation
                                     (if requested).
         """
+        # Resize the image to 640x480 to match the default camera intrinsics used by LCR-Net.
+        # FIXME: This is a nasty hack that will only work for images with a 4:3 aspect ratio. The better long-term fix
+        #        is to pass the right camera intrinsics to LCR-Net. However, this is a little fiddly because LCR-Net's
+        #        are part of a P = K[R|t] projection matrix, and so I'm fixing my immediate problem this way for now.
+        image = cv2.resize(image, (640, 480))
+
         # Use LCR-Net to generate a set of pose proposals for the image.
         start = timer()
         pose_proposals: Dict[str, Any] = self.__generate_pose_proposals(image)
