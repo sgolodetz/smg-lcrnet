@@ -25,8 +25,8 @@ def make_frame_processor(skeleton_detector: SkeletonDetector, *, debug: bool = F
     :return:                    The frame processor.
     """
     # noinspection PyUnusedLocal
-    def detect_skeletons(colour_image: np.ndarray, depth_image: np.ndarray,
-                         world_from_camera: np.ndarray) -> Tuple[List[Skeleton3D], Optional[np.ndarray]]:
+    def detect_skeletons(colour_image: np.ndarray, depth_image: np.ndarray, world_from_camera: np.ndarray) \
+            -> Tuple[List[Skeleton3D], Optional[np.ndarray]]:
         """
         Detect 3D skeletons in an RGB image using LCR-Net.
 
