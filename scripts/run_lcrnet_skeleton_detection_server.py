@@ -87,7 +87,7 @@ def main() -> None:
                 # Use LCR-Net to detect 3D skeletons in the colour image.
                 start = timer()
                 skeletons_3d, visualisation = skeleton_detector.detect_skeletons(
-                    colour_image, tracker_w_t_c, visualise=False
+                    colour_image, tracker_w_t_c, intrinsics, visualise=False
                 )
                 end = timer()
                 print(f"Skeleton Detection Time: {end - start}s")

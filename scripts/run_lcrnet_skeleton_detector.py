@@ -59,12 +59,15 @@ def main() -> None:
                     # noinspection PyProtectedMember
                     os._exit(0)
 
-            # Get a colour image from the camera.
+            # Get a colour image and the intrinsics from the camera.
             colour_image, _ = camera.get_images()
+            intrinsics: Tuple[float, float, float, float] = camera.get_colour_intrinsics()
 
             # Detect any 3D skeletons in the image.
             start = timer()
-            skeletons, visualisation = skeleton_detector.detect_skeletons(colour_image, np.eye(4), visualise=False)
+            skeletons, visualisation = skeleton_detector.detect_skeletons(
+                colour_image, np.eye(4), intrinsics, visualise=False
+            )
             end = timer()
             print(f"Skeleton Detection Time: {end - start}s")
 
