@@ -17,7 +17,7 @@ from smg.skeletons import Skeleton3D
 
 def make_frame_processor(skeleton_detector: SkeletonDetector, *, debug: bool = False) -> \
         Callable[
-            [np.ndarray, np.ndarray, np.ndarray, Tuple[float, float, float, float]],
+            [int, np.ndarray, np.ndarray, np.ndarray, Tuple[float, float, float, float]],
             Tuple[List[Skeleton3D], Optional[np.ndarray]]
         ]:
     """
@@ -28,12 +28,13 @@ def make_frame_processor(skeleton_detector: SkeletonDetector, *, debug: bool = F
     :return:                    The frame processor.
     """
     # noinspection PyUnusedLocal
-    def detect_skeletons(colour_image: np.ndarray, depth_image: np.ndarray, world_from_camera: np.ndarray,
-                         intrinsics: Tuple[float, float, float, float]) \
+    def detect_skeletons(frame_idx: int, colour_image: np.ndarray, depth_image: np.ndarray,
+                         world_from_camera: np.ndarray, intrinsics: Tuple[float, float, float, float]) \
             -> Tuple[List[Skeleton3D], Optional[np.ndarray]]:
         """
         Detect 3D skeletons in an RGB image using LCR-Net.
 
+        :param frame_idx:           Passed in by the skeleton detection service, but ignored.
         :param colour_image:        The RGB image.
         :param depth_image:         Passed in by the skeleton detection service, but ignored.
         :param world_from_camera:   The camera pose.
