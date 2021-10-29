@@ -128,39 +128,28 @@ class SkeletonDetector:
 
         self.__net: LCRNet = SkeletonDetector.__make_net(self.__cfg, self.__checkpoint, self.__gpu_id, self.__njts)
 
-        # Load some relevant matrices.
-        self.__projmat: np.ndarray = np.load(
-            os.path.join(os.path.dirname(__file__), "../external/lcrnet/standard_projmat.npy")
-        )
-
-        self.__projmat_block_diag, self.__M = scene.get_matrices(self.__projmat, self.__njts)
-
-        # Run a detection on a dummy image to warm the network up.
+        # Run the network on a dummy image to warm it up.
         dummy_image: np.ndarray = np.zeros((480, 640, 3), dtype=np.uint8)
-        self.detect_skeletons(dummy_image, np.eye(4))
+        self.__generate_pose_proposals(dummy_image)
 
         # Enable debugging if requested.
         self.__debug = debug
 
     # PUBLIC METHODS
 
-    def detect_skeletons(self, image: np.ndarray, world_from_camera: np.ndarray, *,
-                         visualise: bool = False) -> Tuple[List[Skeleton3D], np.ndarray]:
+    def detect_skeletons(self, image: np.ndarray, world_from_camera: np.ndarray,
+                         intrinsics: Tuple[float, float, float, float], *, visualise: bool = False) \
+            -> Tuple[List[Skeleton3D], np.ndarray]:
         """
         Detect 3D skeletons in an RGB image using LCR-Net.
 
         :param image:               The RGB image.
         :param world_from_camera:   The camera pose.
+        :param intrinsics:          The camera intrinsics, as an (fx, fy, cx, cy) tuple.
         :param visualise:           Whether to make the output visualisation (can be a bit slow).
         :return:                    A tuple consisting of the detected 3D skeletons and the output visualisation
                                     (if requested).
         """
-        # Resize the image to 640x480 to match the default camera intrinsics used by LCR-Net.
-        # FIXME: This is a nasty hack that will only work for images with a 4:3 aspect ratio. The better long-term fix
-        #        is to pass the right camera intrinsics to LCR-Net. However, this is a little fiddly because LCR-Net's
-        #        are part of a P = K[R|t] projection matrix, and so I'm fixing my immediate problem this way for now.
-        image = cv2.resize(image, (640, 480))
-
         # Use LCR-Net to generate a set of pose proposals for the image.
         start = timer()
         pose_proposals: Dict[str, Any] = self.__generate_pose_proposals(image)
@@ -180,13 +169,18 @@ class SkeletonDetector:
 
         # Transform the 3D poses into scene coordinates.
         start = timer()
+
+        projmat: np.ndarray = np.zeros((3, 4))
+        projmat[0:3, 0:3] = GeometryUtil.intrinsics_to_matrix(intrinsics) / 1000
+        # noinspection PyPep8Naming
+        projmat_block_diag, M = scene.get_matrices(projmat, self.__njts)
+
         for detection in detections:
-            delta3d: np.ndarray = scene.compute_reproj_delta_3d(
-                detection, self.__projmat_block_diag, self.__M, self.__njts
-            )
+            delta3d: np.ndarray = scene.compute_reproj_delta_3d(detection, projmat_block_diag, M, self.__njts)
             detection["pose3d"][:  self.__njts] += delta3d[0]
             detection["pose3d"][self.__njts:2 * self.__njts] += delta3d[1]
             detection["pose3d"][2 * self.__njts:3 * self.__njts] -= delta3d[2]
+
         end = timer()
         if self.__debug:
             print(f"  Scene Coordinate Regression Time: {end - start}s")
