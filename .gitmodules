@@ -1,0 +1,4 @@
+[submodule "smg/external/lcrnet"]
+	path = smg/external/lcrnet
+	url = git@github.com:sgolodetz/lcrnet-v2-improved-ppi.git
+	branch = master
