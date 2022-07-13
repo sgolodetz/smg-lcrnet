@@ -17,6 +17,22 @@ You are not permitted under this Licence to use this Software commercially. Use 
 (3)	use of the Software or any derivative of it for research with the final aim of developing non-software products for sale or license to a third party, or
 (4)	use of the Software to provide any service to an external organisation for which payment is received.
 
-If you are interested in using the Software commercially, please contact the Cyber-Physical Systems Group directly to negotiate a licence.
-
 Contact details are: niki.trigoni@cs.ox.ac.uk or andrew.markham@cs.ox.ac.uk.
+
+THIRD-PARTY CODE
+
+(1) The lcrnet submodule in smg/external/lcrnet is distributed under the GNU General Public License. See:
+
+https://github.com/naver/lcrnet-v2-improved-ppi/blob/master/README.MD
+
+We have not made any changes to this code.
+
+(2) The Detectron.pytorch submodule in smg/external/lcrnet/Detectron.pytorch is distributed under the MIT License. See:
+
+https://github.com/roytseng-tw/Detectron.pytorch/blob/master/LICENSE
+
+The smg-lcrnet branch in our fork (https://github.com/sgolodetz/Detectron.pytorch) makes minor modifications to get the code working on Windows. See:
+
+https://github.com/roytseng-tw/Detectron.pytorch/compare/master...sgolodetz:Detectron.pytorch:smg-lcrnet
+
+Some of the code in skeleton_detector.py roughly follows that in the LCR-Net code (it was otherwise difficult to make use of LCR-Net as a library). The relevant parts of the code have been marked accordingly.
