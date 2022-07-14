@@ -51,7 +51,9 @@ However, these are all quite painful (much more painful than our chosen solution
    - [smg-skeletons](https://github.com/sgolodetz/smg-skeletons/blob/master/README.md)
    - [smg-comms](https://github.com/sgolodetz/smg-comms/blob/master/README.md)
 
-8. Add the relevant directories to the Python path, e.g.
+8. Download the LCR-Net model we use (`DEMO_ECCV18`) from [here](http://pascal.inrialpes.fr/data2/grogez/LCR-Net/pthmodels), and put it in a new directory called `models` beneath `<root>/smg-lcrnet/smg/external/lcrnet`.
+
+9. Add the relevant directories to the Python path, e.g.
 
    ```
    export PYTHONPATH="C:/smglib/smg-lcrnet/smg/external/lcrnet/Detectron.pytorch/lib;$PYTHONPATH"
@@ -59,7 +61,7 @@ However, these are all quite painful (much more painful than our chosen solution
    export PYTHONPATH="C:/smglib/smg-lcrnet;$PYTHONPATH"
    ```
 
-9. You should then be able to successfully run `<root>/smg-lcrnet/scripts/run_lcrnet_skeleton_detection_service.py` (please test this).
+10. You should then be able to successfully run `<root>/smg-lcrnet/scripts/run_lcrnet_skeleton_detection_service.py` (please test this).
 
 ---
 
